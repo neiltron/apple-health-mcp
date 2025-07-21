@@ -1,0 +1,13 @@
+node_modules/
+.DS_Store
+*.log
+.env
+.env.local
+dist/
+build/
+.cache/
+*.db
+*.db-journal
+HealthAll_*/
+health-data/
+tmp/
