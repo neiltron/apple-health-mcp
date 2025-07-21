@@ -24,17 +24,17 @@ export class MemoryManager {
   
   startMonitoring(): void {
     this.intervalId = setInterval(() => {
-      this.checkMemoryPressure().catch(console.error);
+      this.checkMemoryPressure().catch(() => {});
     }, this.checkInterval);
     
-    console.log('Memory monitoring started');
+    // console.log('Memory monitoring started');
   }
   
   stopMonitoring(): void {
     if (this.intervalId) {
       clearInterval(this.intervalId);
       this.intervalId = undefined;
-      console.log('Memory monitoring stopped');
+      // console.log('Memory monitoring stopped');
     }
   }
   
@@ -44,11 +44,11 @@ export class MemoryManager {
       const threshold = this.maxMemoryMB * 0.8;
       
       if (memoryUsage > threshold) {
-        console.log(`Memory pressure detected: ${memoryUsage}MB / ${this.maxMemoryMB}MB`);
+        // console.log(`Memory pressure detected: ${memoryUsage}MB / ${this.maxMemoryMB}MB`);
         await this.evictLRUTables();
       }
     } catch (error) {
-      console.error('Error checking memory pressure:', error);
+      // console.error('Error checking memory pressure:', error);
     }
   }
   
@@ -76,7 +76,7 @@ export class MemoryManager {
       const currentUsage = await this.getEstimatedMemoryUsage();
       if (currentUsage < targetMemory) break;
       
-      console.log(`Evicting table: ${table}`);
+      // console.log(`Evicting table: ${table}`);
       await this.loader.unloadTable(table);
     }
   }

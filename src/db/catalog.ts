@@ -30,9 +30,9 @@ export class FileCatalog {
         }
       }
       
-      console.log(`Found ${this.catalog.size} health data CSV files`);
+      // console.log(`Found ${this.catalog.size} health data CSV files`);
     } catch (error) {
-      console.error(`Error scanning directory ${this.dataDir}:`, error);
+      // console.error(`Error scanning directory ${this.dataDir}:`, error);
       throw new Error(`Failed to catalog health data files: ${error}`);
     }
   }

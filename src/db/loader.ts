@@ -30,7 +30,7 @@ export class TableLoader {
     const tempTableName = `${tableName}_staging`;
     
     try {
-      console.log(`Loading table ${tableName} from ${filePath}`);
+      // console.log(`Loading table ${tableName} from ${filePath}`);
       
       // Create staging table with recent data only
       const cutoffDate = new Date();
@@ -57,11 +57,11 @@ export class TableLoader {
         // Clean and create final table
         await this.cleanAndOptimizeTable(tempTableName, tableName);
         this.catalog.markLoaded(tableName, rowCount);
-        console.log(`Loaded ${rowCount} rows into ${tableName}`);
+        // console.log(`Loaded ${rowCount} rows into ${tableName}`);
       } else {
         // Drop empty staging table
         await this.db.run(`DROP TABLE IF EXISTS ${tempTableName}`);
-        console.log(`No recent data found for ${tableName}`);
+        // console.log(`No recent data found for ${tableName}`);
       }
     } catch (error) {
       // Clean up on error
@@ -109,13 +109,13 @@ export class TableLoader {
   
   async loadAllTables(): Promise<void> {
     const tables = this.catalog.getAllTables();
-    console.log(`Loading ${tables.length} tables...`);
+    // console.log(`Loading ${tables.length} tables...`);
     
     for (const table of tables) {
       try {
         await this.ensureTableLoaded(table);
       } catch (error) {
-        console.error(`Failed to load ${table}:`, error);
+        // console.error(`Failed to load ${table}:`, error);
       }
     }
   }
@@ -124,9 +124,9 @@ export class TableLoader {
     try {
       await this.db.run(`DROP TABLE IF EXISTS ${tableName}`);
       this.catalog.markUnloaded(tableName);
-      console.log(`Unloaded table ${tableName}`);
+      // console.log(`Unloaded table ${tableName}`);
     } catch (error) {
-      console.error(`Failed to unload ${tableName}:`, error);
+      // console.error(`Failed to unload ${tableName}:`, error);
     }
   }
   

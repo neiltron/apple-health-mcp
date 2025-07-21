@@ -43,7 +43,7 @@ export class QueryCache {
       return undefined;
     }
     
-    console.log(`Cache hit for query: ${query.substring(0, 50)}...`);
+    // console.log(`Cache hit for query: ${query.substring(0, 50)}...`);
     return cached.result;
   }
   
@@ -64,7 +64,7 @@ export class QueryCache {
       ttl: this.getTTL(query)
     });
     
-    console.log(`Cached query result: ${query.substring(0, 50)}...`);
+    // console.log(`Cached query result: ${query.substring(0, 50)}...`);
   }
   
   private findOldestEntry(): string | undefined {
@@ -83,7 +83,7 @@ export class QueryCache {
   
   clear(): void {
     this.cache.clear();
-    console.log('Query cache cleared');
+    // console.log('Query cache cleared');
   }
   
   getSize(): number {

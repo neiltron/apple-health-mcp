@@ -11,3 +11,4 @@ build/
 HealthAll_*/
 health-data/
 tmp/
+mcp-server.log

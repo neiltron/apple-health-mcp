@@ -26,14 +26,14 @@ const CACHE_SIZE = parseInt(process.env.CACHE_SIZE || '100');
 
 // Validate data directory
 if (!DATA_DIR) {
-  console.error('ERROR: HEALTH_DATA_DIR environment variable not set');
-  console.error('Usage: HEALTH_DATA_DIR=/path/to/health/data bun run src/server.ts');
+  // console.error('ERROR: HEALTH_DATA_DIR environment variable not set');
+  // console.error('Usage: HEALTH_DATA_DIR=/path/to/health/data bun run src/server.ts');
   process.exit(1);
 }
 
-console.log(`Starting Apple Health MCP Server...`);
-console.log(`Data directory: ${DATA_DIR}`);
-console.log(`Max memory: ${MAX_MEMORY_MB}MB`);
+// console.log(`Starting Apple Health MCP Server...`);
+// console.log(`Data directory: ${DATA_DIR}`);
+// console.log(`Max memory: ${MAX_MEMORY_MB}MB`);
 
 // Initialize components
 const db = new HealthDataDB({ dataDir: DATA_DIR, maxMemoryMB: MAX_MEMORY_MB });
@@ -52,6 +52,10 @@ const reportTool = new HealthReportTool(db, cache);
 const server = new Server({
   name: "apple-health-mcp",
   version: "1.0.0",
+}, {
+  capabilities: {
+    tools: {}
+  }
 });
 
 // List available tools
@@ -170,7 +174,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         );
     }
   } catch (error) {
-    console.error(`Error executing tool ${name}:`, error);
+    // console.error(`Error executing tool ${name}:`, error);
     
     if (error instanceof McpError) {
       throw error;
@@ -187,10 +191,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 async function main() {
   try {
     // Initialize database and catalog
-    console.log('Initializing database...');
+    // console.log('Initializing database...');
     await db.initialize();
     
-    console.log('Scanning health data files...');
+    // console.log('Scanning health data files...');
     await catalog.initialize();
     
     // Start memory monitoring
@@ -200,21 +204,21 @@ async function main() {
     const transport = new StdioServerTransport();
     await server.connect(transport);
     
-    console.log('Apple Health MCP Server ready!');
+    // console.log('Apple Health MCP Server ready!');
     
     // Handle shutdown
     process.on('SIGINT', async () => {
-      console.log('\\nShutting down...');
+      // console.log('\\nShutting down...');
       memoryManager.stopMonitoring();
       await db.close();
       process.exit(0);
     });
     
   } catch (error) {
-    console.error('Failed to start server:', error);
+    // console.error('Failed to start server:', error);
     process.exit(1);
   }
 }
 
 // Start the server
-main().catch(console.error);
+main().catch(() => {});
