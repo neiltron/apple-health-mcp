@@ -73,8 +73,9 @@ To use get your data:
 
 ## Available Tools
 
-1. `health_query`: Execute SQL queries directly on your health data.
-2. `health_report`: Generate comprehensive health reports.
+1. `health_schema`: Get information about available tables and their structure
+2. `health_query`: Execute SQL queries directly on your health data
+3. `health_report`: Generate comprehensive health reports
 
 ## Data Structure
 

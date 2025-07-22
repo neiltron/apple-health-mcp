@@ -17,6 +17,7 @@ import { MemoryManager } from "./core/memory.js";
 import { QueryOptimizer } from "./core/optimizer.js";
 import { HealthQueryTool } from "./tools/health-query.js";
 import { HealthReportTool } from "./tools/health-report.js";
+import { HealthSchemaTool } from "./tools/health-schema.js";
 import { jsonReplacer } from "./utils.js";
 import type { HealthQueryArgs, HealthReportArgs } from "./types.js";
 
@@ -47,6 +48,7 @@ const optimizer = new QueryOptimizer(loader);
 // Initialize tools
 const queryTool = new HealthQueryTool(db, cache, optimizer);
 const reportTool = new HealthReportTool(db, cache);
+const schemaTool = new HealthSchemaTool(db, catalog);
 
 // Create MCP server
 const server = new Server({
@@ -109,6 +111,15 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         },
         required: ["report_type"]
       }
+    },
+    {
+      name: "health_schema",
+      description: "Get information about available health data tables, their structure, and sample data to help write SQL queries",
+      inputSchema: {
+        type: "object",
+        properties: {},
+        additionalProperties: false
+      }
     }
   ]
 }));
@@ -132,6 +143,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           content: [{
             type: "text",
             text: JSON.stringify(await reportTool.execute(args as unknown as HealthReportArgs), jsonReplacer, 2)
+          }]
+        };
+        
+      case "health_schema":
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify(await schemaTool.execute(), jsonReplacer, 2)
           }]
         };
         

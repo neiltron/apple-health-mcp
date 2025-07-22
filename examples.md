@@ -20,7 +20,25 @@ bun run src/server.ts
 
 ## Tool Usage Examples
 
-### 1. Health Query Tool
+### 1. Health Schema Tool
+
+```javascript
+// Get information about available tables and their structure
+{
+  "tool": "health_schema",
+  "arguments": {}
+}
+```
+
+This returns:
+- List of all available health data tables
+- Column information for key tables
+- Sample data rows
+- Data statistics (date ranges, row counts)
+- Common table patterns organized by category
+- Query tips and best practices
+
+### 2. Health Query Tool
 
 #### Basic Queries
 
@@ -72,7 +90,7 @@ bun run src/server.ts
 }
 ```
 
-### 2. Health Report Tool
+### 3. Health Report Tool
 
 ```javascript
 // Weekly report
