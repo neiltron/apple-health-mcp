@@ -1,0 +1,37 @@
+# Source files
+src/
+tsconfig.json
+*.ts
+
+# Development files
+.gitignore
+bun.lock
+node_modules/
+.DS_Store
+*.log
+
+# Health data files
+HealthAll_*/
+health-data/
+*.csv
+
+# Documentation files (except README.md)
+*.md
+!README.md
+examples.md
+mcp_server_architecture.md
+apple_health_data_analysis.md
+CLAUDE.md
+
+# Build artifacts
+.cache/
+tmp/
+
+# Environment and config
+.env
+.env.local
+
+# Database files
+*.db
+*.db-journal
+mcp-server.log

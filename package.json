@@ -1,13 +1,45 @@
 {
-  "name": "apple-health-mcp",
+  "name": "@neiltron/apple-health-mcp",
   "version": "1.0.0",
   "description": "MCP server for querying Apple Health data with DuckDB",
-  "main": "src/server.ts",
+  "main": "dist/server.js",
   "type": "module",
+  "bin": {
+    "apple-health-mcp": "dist/server.js"
+  },
+  "files": [
+    "dist/**/*",
+    "README.md"
+  ],
   "scripts": {
-    "start": "bun run src/server.ts",
+    "build": "bun build src/server.ts --outdir dist --target node --format esm --external duckdb",
+    "build:tsc": "tsc",
+    "start": "node dist/server.js",
     "dev": "bun --watch src/server.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "apple-health",
+    "mcp",
+    "model-context-protocol",
+    "health-data",
+    "duckdb",
+    "sql",
+    "health-analytics"
+  ],
+  "author": "Neil Kumar",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/neiltron/apple-health-mcp.git"
+  },
+  "homepage": "https://github.com/neiltron/apple-health-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/neiltron/apple-health-mcp/issues"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.4",
