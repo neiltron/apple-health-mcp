@@ -1,11 +1,10 @@
 # Apple Health MCP Server
 
-An MCP (Model Context Protocol) server for querying Apple Health data using natural language and SQL. Built with Bun and DuckDB for fast, efficient health data analysis.
+An MCP (Model Context Protocol) server for querying Apple Health data using SQL. Built with Bun and DuckDB for fast, efficient health data analysis.
 
 ## Features
 
 - **SQL Query Execution**: Direct SQL queries against your Apple Health data
-- **Natural Language Insights**: Ask questions in plain English
 - **Automated Reports**: Generate weekly/monthly health summaries
 - **Efficient Data Loading**: Lazy loading with configurable time windows
 - **Smart Caching**: Query result caching with TTL
@@ -78,22 +77,7 @@ Execute SQL queries directly on your health data.
 }
 ```
 
-### 2. health_insights
-
-Get insights using natural language questions.
-
-```javascript
-// Example usage
-{
-  "tool": "health_insights",
-  "arguments": {
-    "question": "What was my average heart rate last week?",
-    "timeframe": "7 days"
-  }
-}
-```
-
-### 3. health_report
+### 2. health_report
 
 Generate comprehensive health reports.
 
@@ -144,13 +128,6 @@ JOIN hkquantitytypeidentifierheartrate hr
 GROUP BY activityType;
 ```
 
-### Natural Language Examples
-
-- "What was my average sleep duration last month?"
-- "Show me my heart rate trends over the past week"
-- "How many steps did I take yesterday?"
-- "What were my most active days this week?"
-- "Compare my sleep quality between weekdays and weekends"
 
 ## Data Structure
 

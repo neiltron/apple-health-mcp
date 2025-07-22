@@ -16,10 +16,9 @@ import { QueryCache } from "./core/cache.js";
 import { MemoryManager } from "./core/memory.js";
 import { QueryOptimizer } from "./core/optimizer.js";
 import { HealthQueryTool } from "./tools/health-query.js";
-import { HealthInsightsTool } from "./tools/health-insights.js";
 import { HealthReportTool } from "./tools/health-report.js";
 import { jsonReplacer } from "./utils.js";
-import type { HealthInsightsArgs, HealthQueryArgs, HealthReportArgs } from "./types.js";
+import type { HealthQueryArgs, HealthReportArgs } from "./types.js";
 
 // Get configuration from environment
 const DATA_DIR = process.env.HEALTH_DATA_DIR || './HealthAll_2025-07-202_01-04-39_SimpleHealthExportCSV';
@@ -43,11 +42,10 @@ const catalog = new FileCatalog(DATA_DIR);
 const loader = new TableLoader(db, catalog);
 const cache = new QueryCache(CACHE_SIZE);
 const memoryManager = new MemoryManager(db, catalog, loader, MAX_MEMORY_MB);
-const optimizer = new QueryOptimizer(loader, catalog);
+const optimizer = new QueryOptimizer(loader);
 
 // Initialize tools
 const queryTool = new HealthQueryTool(db, cache, optimizer);
-const insightsTool = new HealthInsightsTool(db, cache, optimizer);
 const reportTool = new HealthReportTool(db, cache);
 
 // Create MCP server
@@ -80,30 +78,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           }
         },
         required: ["query"]
-      }
-    },
-    {
-      name: "health_insights",
-      description: "Get health insights using natural language questions",
-      inputSchema: {
-        type: "object",
-        properties: {
-          question: { 
-            type: "string",
-            description: "Natural language question about health data"
-          },
-          timeframe: { 
-            type: "string",
-            description: "Time period (e.g., '7 days', '1 month', '3 months')",
-            default: "30 days"
-          },
-          metrics: {
-            type: "array",
-            items: { type: "string" },
-            description: "Specific metrics to include"
-          }
-        },
-        required: ["question"]
       }
     },
     {
@@ -150,14 +124,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           content: [{
             type: "text",
             text: JSON.stringify(await queryTool.execute(args as unknown as HealthQueryArgs), jsonReplacer, 2)
-          }]
-        };
-        
-      case "health_insights":
-        return {
-          content: [{
-            type: "text",
-            text: JSON.stringify(await insightsTool.execute(args as unknown as HealthInsightsArgs), jsonReplacer, 2)
           }]
         };
         

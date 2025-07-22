@@ -33,12 +33,6 @@ export interface HealthQueryArgs {
   format?: OutputFormat;
 }
 
-export interface HealthInsightsArgs {
-  question: string;
-  timeframe?: string;
-  metrics?: string[];
-}
-
 export interface HealthReportArgs {
   report_type: 'weekly' | 'monthly' | 'custom';
   start_date?: string;

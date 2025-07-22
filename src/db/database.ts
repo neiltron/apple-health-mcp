@@ -5,14 +5,17 @@ import type { HealthDataConfig } from '../types';
 export class HealthDataDB {
   private db: Database;
   private connections: Map<string, Connection> = new Map();
-  private config: Required<HealthDataConfig>;
+  private config: HealthDataConfig & {
+    maxMemoryMB: number;
+    prewarmCache: boolean;
+    rollingWindowDays: number;
+  };
   
   constructor(config: HealthDataConfig) {
     this.config = {
       maxMemoryMB: 1024,
       prewarmCache: false,
       rollingWindowDays: 90,
-      cacheDir: undefined,
       ...config
     };
     

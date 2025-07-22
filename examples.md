@@ -72,46 +72,7 @@ bun run src/server.ts
 }
 ```
 
-### 2. Health Insights Tool
-
-```javascript
-// Simple questions
-{
-  "tool": "health_insights",
-  "arguments": {
-    "question": "How well did I sleep last night?"
-  }
-}
-
-{
-  "tool": "health_insights",
-  "arguments": {
-    "question": "What's my average heart rate this week?",
-    "timeframe": "7 days"
-  }
-}
-
-// Specific metric analysis
-{
-  "tool": "health_insights",
-  "arguments": {
-    "question": "Show me my step count trends",
-    "timeframe": "1 month",
-    "metrics": ["steps", "distance"]
-  }
-}
-
-// Comparative questions
-{
-  "tool": "health_insights",
-  "arguments": {
-    "question": "How does my activity level compare between last week and this week?",
-    "timeframe": "14 days"
-  }
-}
-```
-
-### 3. Health Report Tool
+### 2. Health Report Tool
 
 ```javascript
 // Weekly report
@@ -148,12 +109,12 @@ bun run src/server.ts
 ### 1. Morning Health Check
 
 ```javascript
-// Get a quick overview of last night's sleep and today's readiness
+// Get sleep data from last night
 {
-  "tool": "health_insights",
+  "tool": "health_query",
   "arguments": {
-    "question": "How was my sleep last night and what's my resting heart rate this morning?",
-    "timeframe": "1 day"
+    "query": "SELECT DATE(startDate) as night, SUM(value)/3600 as total_hours, SUM(CASE WHEN type LIKE '%AsleepDeep%' THEN value ELSE 0 END)/3600 as deep_hours FROM hkcategorytypeidentifiersleepanalysis WHERE type LIKE '%Asleep%' AND DATE(startDate) = CURRENT_DATE - 1 GROUP BY DATE(startDate)",
+    "format": "summary"
   }
 }
 ```
@@ -208,33 +169,6 @@ bun run src/server.ts
 }
 ```
 
-## Natural Language Query Patterns
-
-The health_insights tool understands various question patterns:
-
-### Heart Rate Queries
-- "What's my heart rate?"
-- "Show me heart rate trends"
-- "What was my average HR during workouts?"
-- "How's my resting heart rate?"
-
-### Sleep Queries
-- "How did I sleep?"
-- "What's my sleep quality?"
-- "Am I getting enough deep sleep?"
-- "Show me my sleep patterns"
-
-### Activity Queries
-- "How active was I today?"
-- "What's my step count?"
-- "How many calories did I burn?"
-- "Show me my walking distance"
-
-### Workout Queries
-- "What workouts did I do?"
-- "How long did I exercise?"
-- "Which exercises burn the most calories?"
-- "Show me my training frequency"
 
 ## Performance Tips
 
