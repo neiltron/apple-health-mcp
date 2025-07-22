@@ -18,6 +18,8 @@ import { QueryOptimizer } from "./core/optimizer.js";
 import { HealthQueryTool } from "./tools/health-query.js";
 import { HealthInsightsTool } from "./tools/health-insights.js";
 import { HealthReportTool } from "./tools/health-report.js";
+import { jsonReplacer } from "./utils.js";
+import type { HealthInsightsArgs, HealthQueryArgs, HealthReportArgs } from "./types.js";
 
 // Get configuration from environment
 const DATA_DIR = process.env.HEALTH_DATA_DIR || './HealthAll_2025-07-202_01-04-39_SimpleHealthExportCSV';
@@ -147,7 +149,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return {
           content: [{
             type: "text",
-            text: JSON.stringify(await queryTool.execute(args), null, 2)
+            text: JSON.stringify(await queryTool.execute(args as unknown as HealthQueryArgs), jsonReplacer, 2)
           }]
         };
         
@@ -155,7 +157,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return {
           content: [{
             type: "text",
-            text: JSON.stringify(await insightsTool.execute(args), null, 2)
+            text: JSON.stringify(await insightsTool.execute(args as unknown as HealthInsightsArgs), jsonReplacer, 2)
           }]
         };
         
@@ -163,7 +165,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return {
           content: [{
             type: "text",
-            text: JSON.stringify(await reportTool.execute(args), null, 2)
+            text: JSON.stringify(await reportTool.execute(args as unknown as HealthReportArgs), jsonReplacer, 2)
           }]
         };
         
