@@ -33,13 +33,13 @@ export class HealthInsightsTool {
             ROUND(MIN(value), 1) as min_heart_rate,
             ROUND(MAX(value), 1) as max_heart_rate,
             COUNT(*) as readings
-          FROM hkquantitytypeidentifierheartrate
+          FROM {heartRateTable}
           WHERE startDate >= CURRENT_DATE - INTERVAL '{timeframe}'
           GROUP BY DATE(startDate)
           ORDER BY date DESC
           LIMIT 30
         `,
-        params: ['timeframe']
+        params: ['timeframe', 'heartRateTable']
       },
       {
         pattern: /sleep|rest|recovery/i,
@@ -50,14 +50,14 @@ export class HealthInsightsTool {
             ROUND(SUM(CASE WHEN type LIKE '%AsleepDeep%' THEN value ELSE 0 END) / 3600, 1) as deep_hours,
             ROUND(SUM(CASE WHEN type LIKE '%AsleepREM%' THEN value ELSE 0 END) / 3600, 1) as rem_hours,
             ROUND(SUM(value) / 3600, 1) as total_hours
-          FROM hkcategorytypeidentifiersleepanalysis
+          FROM {sleepTable}
           WHERE type LIKE '%Asleep%'
             AND startDate >= CURRENT_DATE - INTERVAL '{timeframe}'
           GROUP BY DATE(startDate)
           ORDER BY night DESC
           LIMIT 30
         `,
-        params: ['timeframe']
+        params: ['timeframe', 'sleepTable']
       },
       {
         pattern: /steps|walking|activity/i,
@@ -67,13 +67,13 @@ export class HealthInsightsTool {
             ROUND(SUM(value), 0) as total_steps,
             ROUND(AVG(value), 0) as avg_steps_per_reading,
             COUNT(*) as readings
-          FROM hkquantitytypeidentifierstepcount
+          FROM {stepsTable}
           WHERE startDate >= CURRENT_DATE - INTERVAL '{timeframe}'
           GROUP BY DATE(startDate)
           ORDER BY date DESC
           LIMIT 30
         `,
-        params: ['timeframe']
+        params: ['timeframe', 'stepsTable']
       },
       {
         pattern: /workout|exercise|training/i,
@@ -119,6 +119,18 @@ export class HealthInsightsTool {
     const { question, timeframe = '30 days', metrics } = args;
     
     try {
+      // Debug: Check what tables are available in catalog and database
+      const catalogTables = (this.optimizer as any).catalog.getAllTables();
+      const heartTables = catalogTables.filter((t: string) => t.includes('heart'));
+      
+      if (heartTables.length === 0) {
+        return {
+          error: "No heart rate tables found in catalog",
+          availableTables: catalogTables.slice(0, 10),
+          suggestion: "Check if health data files were properly scanned"
+        };
+      }
+      
       // Try to match with templates first
       const sql = await this.generateSQL(question, timeframe, metrics);
       
@@ -149,6 +161,9 @@ export class HealthInsightsTool {
   }
   
   private async generateSQL(question: string, timeframe: string, metrics?: string[]): Promise<string> {
+    // Get available tables from catalog
+    const catalogTables = (this.optimizer as any).catalog.getAllTables();
+    
     // Try to match with templates
     for (const template of this.templates) {
       if (template.pattern.test(question)) {
@@ -156,6 +171,37 @@ export class HealthInsightsTool {
         
         // Replace parameters
         sql = sql.replace('{timeframe}', this.parseTimeframe(timeframe));
+        
+        // Find and substitute table names
+        if (sql.includes('{heartRateTable}')) {
+          const heartRateTable = catalogTables.find((t: string) => 
+            t.includes('heartrate') && !t.includes('variability') && !t.includes('resting')
+          );
+          if (!heartRateTable) {
+            throw new Error('Heart rate data not available');
+          }
+          sql = sql.replace('{heartRateTable}', heartRateTable);
+        }
+        
+        if (sql.includes('{sleepTable}')) {
+          const sleepTable = catalogTables.find((t: string) => 
+            t.includes('sleepanalysis')
+          );
+          if (!sleepTable) {
+            throw new Error('Sleep analysis data not available');
+          }
+          sql = sql.replace('{sleepTable}', sleepTable);
+        }
+        
+        if (sql.includes('{stepsTable}')) {
+          const stepsTable = catalogTables.find((t: string) => 
+            t.includes('stepcount')
+          );
+          if (!stepsTable) {
+            throw new Error('Step count data not available');
+          }
+          sql = sql.replace('{stepsTable}', stepsTable);
+        }
         
         // Add metric filters if specified
         if (metrics && metrics.length > 0) {
@@ -167,7 +213,7 @@ export class HealthInsightsTool {
     }
     
     // If no template matches, generate a basic query
-    return this.generateBasicQuery(question, timeframe);
+    return this.generateBasicQuery(question, timeframe, catalogTables);
   }
   
   private parseTimeframe(timeframe: string): string {
@@ -178,7 +224,16 @@ export class HealthInsightsTool {
     return '30 days';
   }
   
-  private generateBasicQuery(question: string, timeframe: string): string {
+  private generateBasicQuery(question: string, timeframe: string, catalogTables: string[]): string {
+    // Find a suitable table for the basic query
+    const heartRateTable = catalogTables.find((t: string) => 
+      t.includes('heartrate') && !t.includes('variability') && !t.includes('resting')
+    );
+    
+    if (!heartRateTable) {
+      throw new Error('No suitable health data table found');
+    }
+    
     // This is a simplified fallback - in production, you'd use an LLM
     return `
       SELECT 
@@ -186,7 +241,7 @@ export class HealthInsightsTool {
         DATE(startDate) as date,
         AVG(value) as avg_value,
         COUNT(*) as count
-      FROM hkquantitytypeidentifierheartrate
+      FROM ${heartRateTable}
       WHERE startDate >= CURRENT_DATE - INTERVAL '${this.parseTimeframe(timeframe)}'
       GROUP BY type, DATE(startDate)
       ORDER BY date DESC

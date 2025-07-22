@@ -42,9 +42,14 @@ export class TableLoader {
         SELECT * FROM read_csv('${filePath}',
           header = true,
           skip = 1,
-          auto_detect = true
+          delim = ',',
+          quote = '"',
+          escape = '"',
+          ignore_errors = true,
+          null_padding = true,
+          new_line = '\\r\\n'
         )
-        WHERE TRY_CAST(startDate AS TIMESTAMP) >= '${cutoffStr}'
+        WHERE TRY_CAST(SUBSTR(startDate, 1, 19) AS TIMESTAMP) >= '${cutoffStr}'
       `);
       
       // Get row count
@@ -82,9 +87,8 @@ export class TableLoader {
         sourceName,
         sourceVersion,
         unit,
-        creationDate::TIMESTAMP as creationDate,
-        startDate::TIMESTAMP as startDate,
-        endDate::TIMESTAMP as endDate,
+        TRY_CAST(SUBSTR(startDate, 1, 19) AS TIMESTAMP) as startDate,
+        TRY_CAST(SUBSTR(endDate, 1, 19) AS TIMESTAMP) as endDate,
         TRY_CAST(value AS DOUBLE) as value,
         device,
         productType
