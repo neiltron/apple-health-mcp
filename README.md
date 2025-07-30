@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/neiltron-apple-health-mcp-badge.png)](https://mseep.ai/app/neiltron-apple-health-mcp)
+
 # Apple Health MCP Server
 
 [![npm version](https://badge.fury.io/js/@neiltron%2Fapple-health-mcp.svg)](https://badge.fury.io/js/@neiltron%2Fapple-health-mcp)
