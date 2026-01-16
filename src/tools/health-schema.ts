@@ -22,15 +22,18 @@ export class HealthSchemaTool {
       };
     }
     
-    // Load a sample from a few key tables to show structure
+    // Load a sample from key tables to show structure (including workouts/distance for unit hints)
     const sampleTables = availableTables
-      .filter(name => 
-        name.includes('heartrate') || 
-        name.includes('stepcount') || 
+      .filter(name =>
+        name.includes('heartrate') ||
+        name.includes('stepcount') ||
         name.includes('sleepanalysis') ||
-        name.includes('activeenergyburned')
+        name.includes('activeenergyburned') ||
+        name.includes('distancewalkingrunning') ||
+        name.includes('distancecycling') ||
+        name.includes('workout')
       )
-      .slice(0, 4);
+      .slice(0, 8);
     
     const schema: any = {
       summary: {
@@ -62,9 +65,18 @@ export class HealthSchemaTool {
         
         // Get sample data
         const sampleData = await this.db.execute(`
-          SELECT * FROM ${tableName} 
-          ORDER BY startDate DESC 
+          SELECT * FROM ${tableName}
+          ORDER BY startDate DESC
           LIMIT 3
+        `);
+
+        // Get distinct units for this table (sorted by frequency)
+        const unitInfo = await this.db.execute(`
+          SELECT unit, COUNT(*) as count
+          FROM ${tableName}
+          WHERE unit IS NOT NULL
+          GROUP BY unit
+          ORDER BY count DESC
         `);
         
         // Get data statistics
@@ -83,6 +95,8 @@ export class HealthSchemaTool {
             name: col.column_name,
             type: col.data_type
           })),
+          units: unitInfo.map((u: any) => u.unit),
+          primaryUnit: unitInfo[0]?.unit || 'unknown',
           sampleRows: sampleData.slice(0, 2), // Show only 2 rows to keep response manageable
           statistics: stats[0] || {}
         };
@@ -106,14 +120,23 @@ export class HealthSchemaTool {
     
     // Add query tips
     schema.queryTips = [
+      "IMPORTANT: Always check the 'unit' column - units vary by source device (e.g., km vs m vs mi)",
+      "Include 'unit' in SELECT statements when querying values to verify units",
       "Table names are lowercase versions of the CSV filenames",
       "Always filter by date: WHERE startDate >= 'YYYY-MM-DD'",
       "Use DATE(startDate) for daily grouping",
-      "Heart rate values are in 'count/min', distances in meters",
-      "Sleep data values are in seconds (divide by 3600 for hours)",
       "Use CURRENT_DATE - INTERVAL '30 days' for recent data"
     ];
-    
+
+    // Build unit reference from all sampled tables
+    schema.unitReference = {} as Record<string, string>;
+    for (const [tableName, details] of Object.entries(schema.tableDetails)) {
+      const tableDetails = details as any;
+      if (tableDetails.primaryUnit && tableDetails.primaryUnit !== 'unknown') {
+        schema.unitReference[tableName] = tableDetails.primaryUnit;
+      }
+    }
+
     return schema;
   }
   
