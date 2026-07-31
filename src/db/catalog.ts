@@ -13,17 +13,33 @@ export class FileCatalog {
   async initialize(): Promise<void> {
     await this.scanDirectory();
   }
-  
+
+  // Re-scan the data directory so files added after startup become queryable.
+  async refresh(): Promise<void> {
+    await this.scanDirectory();
+  }
+
   private async scanDirectory(): Promise<void> {
     try {
       const files = await readdir(this.dataDir);
-      
+
       for (const file of files) {
-        const match = file.match(/^(HK\w+TypeIdentifier\w+).*\.csv$/);
+        // Workout exports are named HKWorkoutActivityType.csv or
+        // HKWorkoutActivityTypeRunning.csv, with no literal "TypeIdentifier".
+        const match = file.match(/^(HK\w+TypeIdentifier\w+).*\.csv$/)
+          || file.match(/^(HKWorkoutActivityType\w*).*\.csv$/);
         if (match) {
           const tableName = match[1].toLowerCase();
+          const path = join(this.dataDir, file);
+          const existing = this.catalog.get(tableName);
+
+          // Keep loaded state for tables we have already seen at this path.
+          if (existing && existing.path === path) {
+            continue;
+          }
+
           this.catalog.set(tableName, {
-            path: join(this.dataDir, file),
+            path,
             loaded: false,
             rowCount: null
           });
