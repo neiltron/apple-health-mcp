@@ -1,13 +1,16 @@
 import type { HealthDataDB } from '../db/database';
 import type { FileCatalog } from '../db/catalog';
+import type { TableLoader } from '../db/loader';
 
 export class HealthSchemaTool {
   private db: HealthDataDB;
   private catalog: FileCatalog;
-  
-  constructor(db: HealthDataDB, catalog: FileCatalog) {
+  private loader: TableLoader;
+
+  constructor(db: HealthDataDB, catalog: FileCatalog, loader: TableLoader) {
     this.db = db;
     this.catalog = catalog;
+    this.loader = loader;
   }
   
   async execute(): Promise<any> {
@@ -48,21 +51,32 @@ export class HealthSchemaTool {
     // Get schema information for sample tables
     for (const tableName of sampleTables) {
       try {
-        // Ensure table is loaded
+        // Load the full rolling window through the loader so later queries see all rows
+        await this.loader.ensureTableLoaded(tableName);
+
+        // The loader skips tables with no rows in the rolling window, so the table
+        // may not exist. Report that instead of querying a missing table.
         const entry = this.catalog.getEntry(tableName);
         if (!entry?.loaded) {
-          // Load a small sample to get schema
-          await this.loadTableSample(tableName, entry!.path);
+          schema.tableDetails[tableName] = {
+            note: 'no data in the rolling window (last 90 days)',
+            available: false
+          };
+          continue;
         }
-        
+
         // Get column information
         const columns = await this.db.execute(`
-          SELECT column_name, data_type 
-          FROM information_schema.columns 
+          SELECT column_name, data_type
+          FROM information_schema.columns
           WHERE table_name = '${tableName}'
           ORDER BY ordinal_position
         `);
-        
+
+        const hasUnitColumn = columns.some(
+          (col: any) => String(col.column_name).toLowerCase() === 'unit'
+        );
+
         // Get sample data
         const sampleData = await this.db.execute(`
           SELECT * FROM ${tableName}
@@ -70,15 +84,18 @@ export class HealthSchemaTool {
           LIMIT 3
         `);
 
-        // Get distinct units for this table (sorted by frequency)
-        const unitInfo = await this.db.execute(`
-          SELECT unit, COUNT(*) as count
-          FROM ${tableName}
-          WHERE unit IS NOT NULL
-          GROUP BY unit
-          ORDER BY count DESC
-        `);
-        
+        // Get distinct units for this table (sorted by frequency).
+        // Category and workout tables have no unit column.
+        const unitInfo = hasUnitColumn
+          ? await this.db.execute(`
+              SELECT unit, COUNT(*) as count
+              FROM ${tableName}
+              WHERE unit IS NOT NULL
+              GROUP BY unit
+              ORDER BY count DESC
+            `)
+          : [];
+
         // Get data statistics
         const stats = await this.db.execute(`
           SELECT 
@@ -122,6 +139,7 @@ export class HealthSchemaTool {
     schema.queryTips = [
       "IMPORTANT: Always check the 'unit' column - units vary by source device (e.g., km vs m vs mi)",
       "Include 'unit' in SELECT statements when querying values to verify units",
+      "Category tables (sleep stages, stand hours) keep their text label in the valueText column - the numeric value column is NULL for these rows",
       "Table names are lowercase versions of the CSV filenames",
       "Always filter by date: WHERE startDate >= 'YYYY-MM-DD'",
       "Use DATE(startDate) for daily grouping",
@@ -138,55 +156,5 @@ export class HealthSchemaTool {
     }
 
     return schema;
-  }
-  
-  private async loadTableSample(tableName: string, filePath: string): Promise<void> {
-    const tempTableName = `${tableName}_sample`;
-    
-    try {
-      // Load just a few rows to get schema
-      await this.db.run(`
-        CREATE TABLE ${tempTableName} AS
-        SELECT * FROM read_csv('${filePath}',
-          header = true,
-          skip = 1,
-          delim = ',',
-          quote = '"',
-          escape = '"',
-          ignore_errors = true,
-          null_padding = true,
-          new_line = '\\r\\n'
-        )
-        LIMIT 100
-      `);
-      
-      // Clean up timestamps and create final table
-      await this.db.run(`
-        CREATE TABLE ${tableName} AS
-        SELECT 
-          type,
-          sourceName,
-          sourceVersion,
-          unit,
-          TRY_CAST(SUBSTR(startDate, 1, 19) AS TIMESTAMP) as startDate,
-          TRY_CAST(SUBSTR(endDate, 1, 19) AS TIMESTAMP) as endDate,
-          TRY_CAST(value AS DOUBLE) as value,
-          device,
-          productType
-        FROM ${tempTableName}
-        WHERE value IS NOT NULL
-      `);
-      
-      // Clean up
-      await this.db.run(`DROP TABLE ${tempTableName}`);
-      
-      // Mark as loaded in catalog
-      this.catalog.markLoaded(tableName, 100); // Approximate count
-      
-    } catch (error) {
-      // Clean up on error
-      await this.db.run(`DROP TABLE IF EXISTS ${tempTableName}`);
-      throw error;
-    }
   }
 }
