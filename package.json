@@ -17,6 +17,7 @@
     "start": "node dist/server.js",
     "dev": "bun --watch src/server.ts",
     "typecheck": "tsc --noEmit",
+    "test": "bun test",
     "prepublishOnly": "npm run build"
   },
   "keywords": [

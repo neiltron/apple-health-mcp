@@ -78,35 +78,68 @@ export class TableLoader {
   private async cleanAndOptimizeTable(stagingTable: string, finalTable: string): Promise<void> {
     // Drop existing table if it exists
     await this.db.run(`DROP TABLE IF EXISTS ${finalTable}`);
-    
+
+    // Health exports come in several shapes. Quantity CSVs have unit and value,
+    // category CSVs have no unit, workout CSVs have neither and carry duration
+    // and energy columns instead. Build the projection from the columns that
+    // are actually present so every shape loads.
+    const stagingColumns = await this.db.execute(`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_name = '${stagingTable}'
+      ORDER BY ordinal_position
+    `);
+    const columnNames: string[] = stagingColumns.map((col: any) => col.column_name);
+    const columnByLower = new Map<string, string>();
+    for (const name of columnNames) {
+      columnByLower.set(name.toLowerCase(), name);
+    }
+
+    const startDateCol = columnByLower.get('startdate');
+    const endDateCol = columnByLower.get('enddate');
+    const valueCol = columnByLower.get('value');
+    const typeCol = columnByLower.get('type');
+
+    const selectParts: string[] = [];
+    for (const name of columnNames) {
+      const lower = name.toLowerCase();
+      if (lower === 'startdate' || lower === 'enddate') {
+        selectParts.push(`TRY_CAST(SUBSTR(${name}, 1, 19) AS TIMESTAMP) as ${name}`);
+      } else if (lower === 'value') {
+        // Category rows hold text labels like HKCategoryValueSleepAnalysisAsleepCore.
+        // Keep the numeric cast for quantity queries and keep the raw label in valueText.
+        selectParts.push(`TRY_CAST(${name} AS DOUBLE) as ${name}`);
+        selectParts.push(`CAST(${name} AS VARCHAR) as valueText`);
+      } else {
+        selectParts.push(name);
+      }
+    }
+
+    const whereClause = valueCol ? `\n      WHERE ${valueCol} IS NOT NULL` : '';
+
     // Create optimized table with proper types and indexes
     await this.db.run(`
       CREATE TABLE ${finalTable} AS
-      SELECT 
-        type,
-        sourceName,
-        sourceVersion,
-        unit,
-        TRY_CAST(SUBSTR(startDate, 1, 19) AS TIMESTAMP) as startDate,
-        TRY_CAST(SUBSTR(endDate, 1, 19) AS TIMESTAMP) as endDate,
-        TRY_CAST(value AS DOUBLE) as value,
-        device,
-        productType
-      FROM ${stagingTable}
-      WHERE value IS NOT NULL
+      SELECT
+        ${selectParts.join(',\n        ')}
+      FROM ${stagingTable}${whereClause}
     `);
-    
+
     // Create indexes for common query patterns
-    await this.db.run(`
-      CREATE INDEX IF NOT EXISTS idx_${finalTable}_startdate 
-      ON ${finalTable}(startDate)
-    `);
-    
-    await this.db.run(`
-      CREATE INDEX IF NOT EXISTS idx_${finalTable}_type 
-      ON ${finalTable}(type)
-    `);
-    
+    if (startDateCol) {
+      await this.db.run(`
+        CREATE INDEX IF NOT EXISTS idx_${finalTable}_startdate
+        ON ${finalTable}(${startDateCol})
+      `);
+    }
+
+    if (typeCol) {
+      await this.db.run(`
+        CREATE INDEX IF NOT EXISTS idx_${finalTable}_type
+        ON ${finalTable}(${typeCol})
+      `);
+    }
+
     // Drop staging table
     await this.db.run(`DROP TABLE ${stagingTable}`);
   }
