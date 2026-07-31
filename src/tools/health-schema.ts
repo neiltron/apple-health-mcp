@@ -14,6 +14,14 @@ export class HealthSchemaTool {
   }
   
   async execute(): Promise<any> {
+    // Pick up files exported after the server started. A failed rescan is not
+    // fatal, so fall back to the catalog we already have.
+    try {
+      await this.catalog.refresh();
+    } catch {
+      // keep the existing catalog
+    }
+
     // Get available tables from catalog
     const tableInfo = this.catalog.getTableInfo();
     const availableTables = Object.keys(tableInfo);
@@ -41,7 +49,6 @@ export class HealthSchemaTool {
     const schema: any = {
       summary: {
         totalTables: availableTables.length,
-        loadedTables: availableTables.filter(name => tableInfo[name].loaded).length,
         sampleTablesShown: sampleTables.length
       },
       availableTables: availableTables.sort(),
@@ -126,6 +133,10 @@ export class HealthSchemaTool {
       }
     }
     
+    const loadedNow = this.catalog.getTableInfo();
+    schema.summary.tablesInMemory = availableTables.filter(name => loadedNow[name]?.loaded).length;
+    schema.summary.loadingNote = 'Tables load into memory on demand. A low tablesInMemory count is normal. Every table in availableTables is queryable.';
+
     // Add common table patterns for reference
     schema.commonPatterns = {
       heartRate: availableTables.filter(t => t.includes('heartrate')),

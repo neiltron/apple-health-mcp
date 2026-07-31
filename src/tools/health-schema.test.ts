@@ -127,4 +127,48 @@ describe('HealthSchemaTool', () => {
   test('tells the client about valueText', () => {
     expect(schema.queryTips.some((tip: string) => tip.includes('valueText'))).toBe(true);
   });
+
+  test('reports tables in memory instead of a misleading loaded count', () => {
+    expect(schema.summary.loadedTables).toBeUndefined();
+    expect(schema.summary.tablesInMemory).toBeGreaterThan(0);
+    expect(schema.summary.loadingNote).toContain('on demand');
+  });
+});
+
+describe('HealthSchemaTool rescan', () => {
+  test('finds a workout export written after the first execute', async () => {
+    expect(schema.availableTables).not.toContain('hkworkoutactivitytyperunning');
+
+    const workoutRows: string[] = [];
+    for (let i = 0; i < 10; i++) {
+      const start = formatTimestamp(daysAgo(1 + i));
+      workoutRows.push(
+        `HKWorkoutActivityTypeRunning,Apple Watch,10.0,${start},${start},${1800 + i},${400 + i},${5.5 + i}`
+      );
+    }
+    writeCsv(
+      dataDir,
+      'HKWorkoutActivityTypeRunning.csv',
+      'type,sourceName,sourceVersion,startDate,endDate,duration,totalEnergyBurned,totalDistance',
+      workoutRows
+    );
+
+    const schemaTool = new HealthSchemaTool(db, catalog, loader);
+    const rescanned = await schemaTool.execute();
+
+    expect(rescanned.availableTables).toContain('hkworkoutactivitytyperunning');
+    expect(rescanned.commonPatterns.workouts).toContain('hkworkoutactivitytyperunning');
+
+    // The workout CSV has no unit and no value column. It should still load.
+    const details = rescanned.tableDetails['hkworkoutactivitytyperunning'];
+    expect(details.error).toBeUndefined();
+    expect(details.primaryUnit).toBe('unknown');
+
+    const rows = await db.execute(`
+      SELECT duration, totalDistance
+      FROM hkworkoutactivitytyperunning
+      LIMIT 1
+    `);
+    expect(Number(rows[0].duration)).toBeGreaterThan(0);
+  });
 });
