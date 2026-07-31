@@ -26,8 +26,11 @@ export class FileCatalog {
       for (const file of files) {
         // Workout exports are named HKWorkoutActivityType.csv or
         // HKWorkoutActivityTypeRunning.csv, with no literal "TypeIdentifier".
-        const match = file.match(/^(HK\w+TypeIdentifier\w+).*\.csv$/)
-          || file.match(/^(HKWorkoutActivityType\w*).*\.csv$/);
+        // The name capture stops at the first non-alphanumeric character, so a
+        // file like HKQuantityTypeIdentifierHeartRate_2026-07-21.csv still maps
+        // to the plain hkquantitytypeidentifierheartrate table name.
+        const match = file.match(/^(HK\w+?TypeIdentifier[A-Za-z0-9]+).*\.csv$/)
+          || file.match(/^(HKWorkoutActivityType[A-Za-z0-9]*).*\.csv$/);
         if (match) {
           const tableName = match[1].toLowerCase();
           const path = join(this.dataDir, file);
