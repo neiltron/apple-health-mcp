@@ -68,18 +68,22 @@ export class HealthReportTool {
     switch (type) {
       case 'weekly':
         const weekStart = new Date(now);
+        const weekEnd = new Date(now);
         weekStart.setDate(now.getDate() - 7);
+        weekEnd.setDate(now.getDate() - 1);
         return {
           start: weekStart.toISOString().split('T')[0],
-          end: now.toISOString().split('T')[0]
+          end: weekEnd.toISOString().split('T')[0]
         };
 
       case 'monthly':
         const monthStart = new Date(now);
+        const monthEnd = new Date(now);
         monthStart.setDate(now.getDate() - 30);
+        monthEnd.setDate(now.getDate() - 1);
         return {
           start: monthStart.toISOString().split('T')[0],
-          end: now.toISOString().split('T')[0]
+          end: monthEnd.toISOString().split('T')[0]
         };
 
       case 'custom':
@@ -193,6 +197,9 @@ export class HealthReportTool {
 
     const data = await this.runQuery(query);
     const [avgHr, minHr, maxHr, readings, days] = data.length ? data : [0, 0, 0, 0, 0];
+    if (Number(readings) === 0) {
+      return this.missingSection('Heart Rate', 'heart rate');
+    }
 
     return {
       title: 'Heart Rate',
@@ -232,6 +239,9 @@ export class HealthReportTool {
 
     const data = await this.runQuery(query);
     const [avgSteps, totalSteps, activeDays] = data.length ? data : [0, 0, 0];
+    if (Number(activeDays) === 0) {
+      return this.missingSection('Activity', 'activity');
+    }
 
     return {
       title: 'Activity',
@@ -275,6 +285,9 @@ export class HealthReportTool {
 
     const data = await this.runQuery(query);
     const [avgSleep, minSleep, maxSleep, nights] = data.length ? data : [0, 0, 0, 0];
+    if (Number(nights) === 0) {
+      return this.missingSection('Sleep', 'sleep');
+    }
 
     return {
       title: 'Sleep',
@@ -308,7 +321,13 @@ export class HealthReportTool {
         columns.map((col: any) => String(col.column_name).toLowerCase())
       );
 
-      const typeExpr = columnNames.has('type') ? 'type' : `'${table}'`;
+      let typeExpr = `'${table}'`;
+      if (columnNames.has('type')) {
+        typeExpr = `COALESCE(type, ${typeExpr})`;
+      }
+      if (columnNames.has('activitytype')) {
+        typeExpr = `COALESCE(activityType, ${typeExpr})`;
+      }
       const energyExpr = columnNames.has('totalenergyburned')
         ? 'TRY_CAST(totalEnergyBurned AS DOUBLE)'
         : 'NULL';
@@ -336,6 +355,9 @@ export class HealthReportTool {
 
     const data = await this.runQuery(query);
     const [workouts, types, hours, calories] = data.length ? data : [0, 0, 0, null];
+    if (Number(workouts) === 0) {
+      return this.missingSection('Workouts', 'workouts');
+    }
 
     return {
       title: 'Workouts',
@@ -369,7 +391,8 @@ export class HealthReportTool {
       SELECT
         ROUND(AVG(active_cal), 0) as avg_active_calories,
         ROUND(AVG(basal_cal), 0) as avg_basal_calories,
-        ROUND(AVG(active_cal + basal_cal), 0) as avg_total_calories
+        ROUND(AVG(active_cal + basal_cal), 0) as avg_total_calories,
+        COUNT(*) as days_tracked
       FROM (
         SELECT
           DATE(startDate) as date,
@@ -381,7 +404,10 @@ export class HealthReportTool {
     `;
 
     const data = await this.runQuery(query);
-    const [avgActive, avgBasal, avgTotal] = data.length ? data : [0, 0, 0];
+    const [avgActive, avgBasal, avgTotal, daysTracked] = data.length ? data : [0, 0, 0, 0];
+    if (Number(daysTracked) === 0) {
+      return this.missingSection('Calories', 'calories');
+    }
 
     return {
       title: 'Calories',
@@ -415,7 +441,7 @@ export class HealthReportTool {
     const startDate = new Date(start);
     const endDate = new Date(end);
     const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
-    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
   }
 
   private generateOverallSummary(sections: ReportSection[]): string {
