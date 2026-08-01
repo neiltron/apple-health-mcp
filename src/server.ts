@@ -47,7 +47,7 @@ const optimizer = new QueryOptimizer(loader);
 
 // Initialize tools
 const queryTool = new HealthQueryTool(db, cache, optimizer);
-const reportTool = new HealthReportTool(db, cache);
+const reportTool = new HealthReportTool(db, cache, catalog, loader);
 const schemaTool = new HealthSchemaTool(db, catalog, loader);
 
 // Create MCP server

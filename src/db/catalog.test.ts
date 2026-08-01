@@ -79,6 +79,29 @@ describe('FileCatalog scanning', () => {
     );
   });
 
+  test('strips filename suffixes from the table name', async () => {
+    const suffixDir = mkdtempSync(join(tmpdir(), 'health-catalog-suffix-'));
+    writeCsv(
+      suffixDir,
+      'HKQuantityTypeIdentifierHeartRate_2026-07-212_11-19-16_SimpleHealthExportCSV.csv',
+      QUANTITY_HEADER,
+      [quantityRow()]
+    );
+    writeCsv(
+      suffixDir,
+      'HKWorkoutActivityTypeCycling_2026-07-212_11-19-21_SimpleHealthExportCSV.csv',
+      WORKOUT_HEADER,
+      [workoutRow('HKWorkoutActivityTypeCycling')]
+    );
+
+    const suffixCatalog = new FileCatalog(suffixDir);
+    await suffixCatalog.initialize();
+
+    expect(suffixCatalog.getAllTables()).toContain('hkquantitytypeidentifierheartrate');
+    expect(suffixCatalog.getAllTables()).toContain('hkworkoutactivitytypecycling');
+    rmSync(suffixDir, { recursive: true, force: true });
+  });
+
   test('ignores files that are not health exports', () => {
     const tables = catalog.getAllTables();
     expect(tables).not.toContain('notes');
