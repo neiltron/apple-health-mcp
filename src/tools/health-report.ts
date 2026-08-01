@@ -424,8 +424,11 @@ export class HealthReportTool {
     type: 'weekly' | 'monthly' | 'custom',
     dateRange: { start: string; end: string }
   ): string {
-    const start = new Date(dateRange.start).toLocaleDateString();
-    const end = new Date(dateRange.end).toLocaleDateString();
+    // Date-only strings parse at UTC midnight. Format them in UTC as well so
+    // local time zones west of Greenwich do not display the previous day.
+    const dateFormatOptions: Intl.DateTimeFormatOptions = { timeZone: 'UTC' };
+    const start = new Date(dateRange.start).toLocaleDateString(undefined, dateFormatOptions);
+    const end = new Date(dateRange.end).toLocaleDateString(undefined, dateFormatOptions);
 
     switch (type) {
       case 'weekly':
