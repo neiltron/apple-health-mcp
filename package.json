@@ -42,6 +42,9 @@
   "engines": {
     "node": ">=18.0.0"
   },
+  "pnpm": {
+    "onlyBuiltDependencies": ["duckdb"]
+  },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.4",
     "duckdb": "^1.1.3"
