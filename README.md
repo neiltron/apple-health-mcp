@@ -1,5 +1,7 @@
 # Apple Health MCP Server
 
+[![MCP Toplist](https://mcptoplist.com/badge/glama%2Fneiltron%2Fapple-health-mcp.svg)](https://mcptoplist.com/server/glama%2Fneiltron%2Fapple-health-mcp)
+
 [![npm version](https://badge.fury.io/js/@neiltron%2Fapple-health-mcp.svg)](https://badge.fury.io/js/@neiltron%2Fapple-health-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
