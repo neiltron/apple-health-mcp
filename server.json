@@ -1,0 +1,44 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.neiltron/apple-health-mcp",
+  "title": "Apple Health",
+  "description": "Query and analyze Apple Health CSV exports using DuckDB.",
+  "websiteUrl": "https://github.com/neiltron/apple-health-mcp",
+  "repository": {
+    "url": "https://github.com/neiltron/apple-health-mcp",
+    "source": "github"
+  },
+  "version": "1.2.1",
+  "packages": [
+    {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "@neiltron/apple-health-mcp",
+      "version": "1.2.1",
+      "runtimeHint": "npx",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "HEALTH_DATA_DIR",
+          "description": "Path to the Apple Health CSV export directory",
+          "format": "filepath",
+          "isRequired": true
+        },
+        {
+          "name": "MAX_MEMORY_MB",
+          "description": "Maximum memory usage in megabytes",
+          "format": "number",
+          "default": "1024"
+        },
+        {
+          "name": "CACHE_SIZE",
+          "description": "Maximum number of cached query results",
+          "format": "number",
+          "default": "100"
+        }
+      ]
+    }
+  ]
+}
