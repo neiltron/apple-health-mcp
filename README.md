@@ -1,131 +1,103 @@
 # Apple Health MCP Server
 
-[![npm version](https://badge.fury.io/js/@neiltron%2Fapple-health-mcp.svg)](https://badge.fury.io/js/@neiltron%2Fapple-health-mcp)
+[![npm version](https://badge.fury.io/js/@neiltron%2Fapple-health-mcp.svg)](https://www.npmjs.com/package/@neiltron/apple-health-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-An MCP (Model Context Protocol) server for querying Apple Health data using SQL. Built with DuckDB for fast, efficient health data analysis.
+Query Apple Health data from an MCP client using SQL and DuckDB. The server runs
+locally, reads CSV exports on demand, and provides tools for schema discovery,
+read-only queries, and health summaries.
 
-> [!NOTE]  
-> This project currently relies on the [Simple Health Export CSV](https://apps.apple.com/us/app/simple-health-export-csv/id1535380115?itsct=apps_box_badge&itscg=30200) app by [Eric Wolter](https://www.ericwolter.com). See [Exporting Data](#exporting-data) below for more info on how best to use the app.
->
-> This is currently the easiest way I could find to quickly and reliably get Apple Health data exported in CSV format. If you have ideas of better ways to import data, please submit an issue.
+## Requirements
 
+- Node.js 22 or newer
+- An Apple Health CSV export created with
+  [Simple Health Export CSV](https://apps.apple.com/us/app/simple-health-export-csv/id1535380115)
 
-## Features
-- **Natural language querying**: Your MCP client translates your questions to database queries
-- **SQL Query Execution**: Direct SQL queries against your Apple Health data
-- **Automated Reports**: Generate weekly/monthly health summaries
-- **Efficient Data Loading**: Lazy loading with configurable time windows
-- **Smart Caching**: Query result caching with TTL
+The native Apple Health `export.xml` format is not currently supported.
 
-## Installation
+## Configure an MCP client
 
-No installation required! Use directly with npx via Claude Desktop or other MCP clients.
-
-## Usage with Claude Desktop
-
-Add to your Claude Desktop configuration (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+For Claude Desktop, add the following to
+`~/Library/Application Support/Claude/claude_desktop_config.json`:
 
 ```json
 {
   "mcpServers": {
     "apple-health": {
       "command": "npx",
-      "args": ["@neiltron/apple-health-mcp"],
+      "args": ["-y", "@neiltron/apple-health-mcp"],
       "env": {
-        "HEALTH_DATA_DIR": "/path/to/your/health/export"
+        "HEALTH_DATA_DIR": "/path/to/your/unzipped/health-export"
       }
     }
   }
 }
 ```
 
-### Environment Variables
+Restart the client after changing its configuration. Other MCP clients can use
+the same command, arguments, environment, and `stdio` transport.
 
-- `HEALTH_DATA_DIR` (required): Path to your Apple Health CSV export directory
-- `MAX_MEMORY_MB` (optional): Maximum memory usage in MB (default: 1024)
-- `CACHE_SIZE` (optional): Number of cached query results (default: 100)
+### Environment variables
 
-### Example Configuration
+| Variable | Required | Default | Purpose |
+| --- | --- | --- | --- |
+| `HEALTH_DATA_DIR` | Yes | — | Directory containing the exported CSV files |
+| `MAX_MEMORY_MB` | No | `1024` | DuckDB memory limit in megabytes |
+| `CACHE_SIZE` | No | `100` | Maximum number of cached query results |
 
-```json
-{
-  "mcpServers": {
-    "apple-health": {
-      "command": "npx",
-      "args": ["@neiltron/apple-health-mcp"],
-      "env": {
-        "HEALTH_DATA_DIR": "/Users/yourname/Downloads/HealthAll_2025-07-202_01-04-39_SimpleHealthExportCSV",
-        "MAX_MEMORY_MB": "2048"
-      }
-    }
-  }
-}
-```
+## Export health data
 
-### Exporting Data
-To use get your data:
-- Download the [Simple Health Export CSV](https://apps.apple.com/us/app/simple-health-export-csv/id1535380115?itsct=apps_box_badge&itscg=30200) app for iOS. 
-- Tap the `All` button in the app to download all data for your desired time range (default 1 month).
-- When prompted, Airdrop it to your computer or transfer it some other way.
-- Unzip the file to your desired location
-- Set the `HEALTH_DATA_DIR` value in your MCP config. See [Example Configuration](#example-configuration) above.
+1. Install and open Simple Health Export CSV on your iPhone.
+2. Select **All** and choose the time range to export.
+3. Transfer the archive to the computer running your MCP client.
+4. Unzip it and set `HEALTH_DATA_DIR` to the resulting directory.
 
-## Available Tools
+The server reads the files in place. It does not upload the export or make
+network requests, although query results returned to your MCP client may be
+sent to that client's configured model provider.
 
-1. `health_schema`: Get information about available tables and their structure
-2. `health_query`: Execute SQL queries directly on your health data
-3. `health_report`: Generate comprehensive health reports
+## Tools
 
-## Data Structure
+| Tool | Purpose |
+| --- | --- |
+| `health_schema` | Discover table names, columns, units, and sample rows |
+| `health_query` | Run a read-only `SELECT` query with JSON, CSV, or summary output |
+| `health_report` | Generate a weekly, monthly, or custom health summary |
 
-The server expects Apple Health data exported as CSV files with the following naming pattern:
-- `HKQuantityTypeIdentifier*.csv` - Quantitative health metrics
-- `HKCategoryTypeIdentifier*.csv` - Categorical health data
-- `HKWorkoutActivityType*.csv` - Workout and activity data
+Start with `health_schema`; table names depend on the files in your export.
+See [Querying Apple Health data](https://github.com/neiltron/apple-health-mcp/blob/main/docs/querying.md)
+for the data model and working examples.
 
-Each CSV file should have these columns:
-- `type`: The specific health metric type
-- `sourceName`: Source device/app
-- `startDate`: Start timestamp (UTC)
-- `endDate`: End timestamp (UTC)
-- `value`: The measurement value
-- `unit`: Unit of measurement
+## Current limitation: 90-day window
+
+When a table is first queried, the server currently loads only rows whose
+`startDate` is within the last 90 days. This is a hard-coded implementation
+limit, not a configurable query default. Older data remains in the CSV files
+but is unavailable to tools, and an older export may appear empty. Removing or
+making this behavior configurable is planned.
+
+Other current limitations:
+
+- Only the Simple Health Export CSV layout is supported.
+- The DuckDB database is in memory and is rebuilt for each server process.
+- Device overlap can produce duplicate-looking measurements; queries should
+  account for `sourceName` where appropriate.
+- Health reports summarize recorded data and are not medical advice.
 
 ## Development
 
-For local development:
-
 ```bash
-# Clone and install dependencies
 git clone https://github.com/neiltron/apple-health-mcp.git
 cd apple-health-mcp
-npm install
+bun install
 
-# Build the project
-npm run build
-
-# Type checking
+npm test
 npm run typecheck
+npm run build
 ```
 
-## Troubleshooting
-
-### Common Issues
-
-1. **"No data found"**: Check that your CSV files are in the correct directory
-2. **Memory errors**: Reduce `MAX_MEMORY_MB` or use shorter time windows
-3. **Slow queries**: Ensure you're filtering by date ranges
-4. **Missing tables**: Table names are lowercase (e.g., `hkquantitytypeidentifierheartrate`)
-
-
-## Contributing
-
-Contributions are welcome! Please ensure:
-- Code follows existing patterns
-- TypeScript types are properly defined
-- Error handling is comprehensive
-- Performance impact is considered
+See [Architecture](https://github.com/neiltron/apple-health-mcp/blob/main/docs/architecture.md)
+for the code layout, data lifecycle, and implementation constraints.
 
 ## License
 
