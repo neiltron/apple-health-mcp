@@ -11,11 +11,7 @@
     "allowSyntheticDefaultImports": true,
     "forceConsistentCasingInFileNames": true,
     "noEmit": true,
-    "types": ["bun", "node"],
-    "baseUrl": "./",
-    "paths": {
-      "@/*": ["src/*"]
-    }
+    "types": ["bun", "node"]
   },
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "dist"]
