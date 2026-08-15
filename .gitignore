@@ -10,5 +10,7 @@ build/
 *.db-journal
 HealthAll_*/
 health-data/
+data/
 tmp/
 mcp-server.log
+.worktrees/
