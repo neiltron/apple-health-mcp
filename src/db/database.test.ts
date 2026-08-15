@@ -31,4 +31,21 @@ describe('HealthDataDB settings', () => {
     expect(limitMiB).toBeGreaterThan(MAX_MEMORY_MB * 0.9);
     expect(limitMiB).toBeLessThanOrEqual(MAX_MEMORY_MB);
   });
+
+  test('defaults the memory limit to 2048MB', async () => {
+    const defaultDb = new HealthDataDB({ dataDir: '/nonexistent' });
+    await defaultDb.initialize();
+    try {
+      const result = await defaultDb.execute(
+        `SELECT current_setting('memory_limit') as memory_limit`
+      );
+      // DuckDB renders 2048MB as "1.9 GiB".
+      const setting = String(result[0].memory_limit);
+      expect(setting.endsWith('GiB')).toBe(true);
+      expect(parseFloat(setting)).toBeGreaterThanOrEqual(1.9);
+      expect(parseFloat(setting)).toBeLessThanOrEqual(2.0);
+    } finally {
+      await defaultDb.close();
+    }
+  });
 });

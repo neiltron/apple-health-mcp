@@ -62,11 +62,12 @@ export class HealthSchemaTool {
         // A load failure throws and is reported by the catch below.
         await this.loader.ensureTableLoaded(tableName);
 
-        // A file whose rows are all unreadable still loads as an empty table.
-        // Say so plainly rather than reporting empty statistics.
+        // A file can load as an empty table when its dates are unparseable or
+        // every value is null. Say so plainly rather than reporting empty
+        // statistics.
         if (this.catalog.getEntry(tableName)?.rowCount === 0) {
           schema.tableDetails[tableName] = {
-            note: 'no readable rows in this file'
+            note: 'no rows loaded from this file (unparseable dates or empty values)'
           };
           continue;
         }
