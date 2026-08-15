@@ -46,6 +46,13 @@ export class TableLoader {
     }
   }
 
+  // Column names come from CSV headers, and real exports contain metadata
+  // columns with spaces, e.g. "Health Mate App Version" from Withings. Every
+  // identifier taken from a header must be quoted.
+  private quoteIdent(name: string): string {
+    return `"${name.replace(/"/g, '""')}"`;
+  }
+
   private csvSource(filePath: string): string {
     // Paths are not user queries, but a directory name like "Neil's Health"
     // contains a quote that would end the SQL literal early.
@@ -94,15 +101,16 @@ export class TableLoader {
     const selectParts: string[] = [];
     for (const name of columnNames) {
       const lower = name.toLowerCase();
+      const ident = this.quoteIdent(name);
       if (lower === 'startdate' || lower === 'enddate') {
-        selectParts.push(`TRY_CAST(SUBSTR(${name}, 1, 19) AS TIMESTAMP) as ${name}`);
+        selectParts.push(`TRY_CAST(SUBSTR(${ident}, 1, 19) AS TIMESTAMP) as ${ident}`);
       } else if (lower === 'value') {
         // Category rows hold text labels like HKCategoryValueSleepAnalysisAsleepCore.
         // Keep the numeric cast for quantity queries and keep the raw label in valueText.
-        selectParts.push(`TRY_CAST(${name} AS DOUBLE) as ${name}`);
-        selectParts.push(`CAST(${name} AS VARCHAR) as valueText`);
+        selectParts.push(`TRY_CAST(${ident} AS DOUBLE) as ${ident}`);
+        selectParts.push(`CAST(${ident} AS VARCHAR) as valueText`);
       } else {
-        selectParts.push(name);
+        selectParts.push(ident);
       }
     }
 
@@ -110,10 +118,10 @@ export class TableLoader {
     // history window; an invalid startDate, and a null value where the shape
     // has a value column, are the only exclusions.
     const conditions: string[] = [
-      `TRY_CAST(SUBSTR(${startDateCol}, 1, 19) AS TIMESTAMP) IS NOT NULL`,
+      `TRY_CAST(SUBSTR(${this.quoteIdent(startDateCol)}, 1, 19) AS TIMESTAMP) IS NOT NULL`,
     ];
     if (valueCol) {
-      conditions.push(`${valueCol} IS NOT NULL`);
+      conditions.push(`${this.quoteIdent(valueCol)} IS NOT NULL`);
     }
     const whereClause = `\n      WHERE ${conditions.join('\n        AND ')}`;
 
@@ -130,13 +138,13 @@ export class TableLoader {
     // Create indexes for common query patterns
     await this.db.run(`
       CREATE INDEX IF NOT EXISTS idx_${finalTable}_startdate
-      ON ${finalTable}(${startDateCol})
+      ON ${finalTable}(${this.quoteIdent(startDateCol)})
     `);
 
     if (typeCol) {
       await this.db.run(`
         CREATE INDEX IF NOT EXISTS idx_${finalTable}_type
-        ON ${finalTable}(${typeCol})
+        ON ${finalTable}(${this.quoteIdent(typeCol)})
       `);
     }
   }
