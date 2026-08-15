@@ -8,14 +8,12 @@ export class HealthDataDB {
   private config: HealthDataConfig & {
     maxMemoryMB: number;
     prewarmCache: boolean;
-    rollingWindowDays: number;
   };
-  
+
   constructor(config: HealthDataConfig) {
     this.config = {
       maxMemoryMB: 1024,
       prewarmCache: false,
-      rollingWindowDays: 90,
       ...config
     };
     
@@ -28,9 +26,12 @@ export class HealthDataDB {
   
   private async setupDatabase(): Promise<void> {
     return new Promise((resolve, reject) => {
+      // Zero temporary capacity keeps health rows in memory. A load that does
+      // not fit fails loudly instead of spilling personal data to disk.
       this.db.run(`
         SET memory_limit = '${this.config.maxMemoryMB}MB';
         SET threads = 4;
+        SET max_temp_directory_size = '0 bytes';
       `, (err) => {
         if (err) reject(err);
         else resolve();
@@ -74,14 +75,6 @@ export class HealthDataDB {
         else resolve();
       });
     });
-  }
-  
-  async getMemoryUsage(): Promise<number> {
-    const result = await this.execute(`
-      SELECT current_setting('memory_limit') as memory_limit,
-             current_setting('temp_directory_size') as temp_size
-    `);
-    return parseFloat(result[0]?.memory_limit || '0');
   }
   
   async close(): Promise<void> {
