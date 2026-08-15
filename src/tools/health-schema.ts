@@ -58,16 +58,15 @@ export class HealthSchemaTool {
     // Get schema information for sample tables
     for (const tableName of sampleTables) {
       try {
-        // Load the full rolling window through the loader so later queries see all rows
+        // Materialize the table's full history so later queries see every row.
+        // A load failure throws and is reported by the catch below.
         await this.loader.ensureTableLoaded(tableName);
 
-        // The loader skips tables with no rows in the rolling window, so the table
-        // may not exist. Report that instead of querying a missing table.
-        const entry = this.catalog.getEntry(tableName);
-        if (!entry?.loaded) {
+        // A file whose rows are all unreadable still loads as an empty table.
+        // Say so plainly rather than reporting empty statistics.
+        if (this.catalog.getEntry(tableName)?.rowCount === 0) {
           schema.tableDetails[tableName] = {
-            note: 'no data in the rolling window (last 90 days)',
-            available: false
+            note: 'no readable rows in this file'
           };
           continue;
         }

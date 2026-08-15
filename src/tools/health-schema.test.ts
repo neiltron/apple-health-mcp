@@ -197,6 +197,44 @@ describe('HealthSchemaTool with an old-only export', () => {
   });
 });
 
+describe('HealthSchemaTool with an unreadable export', () => {
+  let emptyDir: string;
+  let emptyDb: HealthDataDB;
+  let emptySchema: any;
+
+  beforeAll(async () => {
+    emptyDir = mkdtempSync(join(tmpdir(), 'health-schema-empty-'));
+
+    // Every row has an unparseable startDate, so nothing survives staging.
+    writeCsv(
+      emptyDir,
+      'HKQuantityTypeIdentifierStepCount.csv',
+      'type,sourceName,sourceVersion,productType,device,startDate,endDate,unit,value',
+      ['HKQuantityTypeIdentifierStepCount,iPhone,18.0,iPhone15,1,not-a-date,not-a-date,count,7000']
+    );
+
+    emptyDb = new HealthDataDB({ dataDir: emptyDir, maxMemoryMB: 512 });
+    await emptyDb.initialize();
+    const emptyCatalog = new FileCatalog(emptyDir);
+    await emptyCatalog.initialize();
+    const emptyLoader = new TableLoader(emptyDb, emptyCatalog);
+
+    emptySchema = await new HealthSchemaTool(emptyDb, emptyCatalog, emptyLoader).execute();
+  });
+
+  afterAll(async () => {
+    await emptyDb.close();
+    rmSync(emptyDir, { recursive: true, force: true });
+  });
+
+  test('gives a neutral note that does not blame a date window', () => {
+    const details = emptySchema.tableDetails['hkquantitytypeidentifierstepcount'];
+    expect(details.note).toBe('no readable rows in this file');
+    expect(details.note).not.toContain('90');
+    expect(details.note).not.toContain('window');
+  });
+});
+
 describe('HealthSchemaTool rescan', () => {
   test('finds a workout export written after the first execute', async () => {
     expect(schema.availableTables).not.toContain('hkworkoutactivitytyperunning');
