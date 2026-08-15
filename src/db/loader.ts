@@ -25,68 +25,59 @@ export class TableLoader {
   }
   
   private async loadTable(tableName: string, filePath: string): Promise<void> {
-    const tempTableName = `${tableName}_staging`;
-    
     try {
-      // Stage every row whose startDate can become a timestamp. There is no
-      // history window; rows with an invalid or missing startDate are the only
-      // ones excluded.
-      await this.db.run(`
-        CREATE TABLE ${tempTableName} AS
-        SELECT * FROM read_csv('${filePath}',
-          header = true,
-          skip = 1,
-          delim = ',',
-          quote = '"',
-          escape = '"',
-          ignore_errors = true,
-          null_padding = true,
-          new_line = '\\r\\n'
-        )
-        WHERE TRY_CAST(SUBSTR(startDate, 1, 19) AS TIMESTAMP) IS NOT NULL
-      `);
+      await this.cleanAndOptimizeTable(filePath, tableName);
 
-      // A file with no readable rows still produces an empty final table so
-      // queries return zero rows instead of a missing-table error, and the CSV
-      // is not rescanned on every request.
-      await this.cleanAndOptimizeTable(tempTableName, tableName);
-
-      // Count the final table: cleanAndOptimizeTable also drops rows with a
-      // null value, so the catalog count matches what is actually stored.
+      // Count the final table: the load also drops rows with a null value, so
+      // the catalog count matches what is actually stored. A file with no
+      // readable rows still produces an empty table and is still marked loaded,
+      // so queries return zero rows instead of a missing-table error and the
+      // CSV is not rescanned on every request.
       const countResult = await this.db.execute(
         `SELECT COUNT(*) as count FROM ${tableName}`
       );
       const rowCount = Number(countResult[0]?.count ?? 0);
       this.catalog.markLoaded(tableName, rowCount);
     } catch (error) {
-      // Clean up on error
-      await this.db.run(`DROP TABLE IF EXISTS ${tempTableName}`);
+      // Clean up on error. There is no staging table, so the partially created
+      // final table is the only thing that can be left behind.
+      await this.db.run(`DROP TABLE IF EXISTS ${tableName}`);
       throw new Error(`Failed to load table ${tableName}: ${error}`);
     }
   }
-  
-  private async cleanAndOptimizeTable(stagingTable: string, finalTable: string): Promise<void> {
+
+  private csvSource(filePath: string): string {
+    return `read_csv('${filePath}',
+        header = true,
+        skip = 1,
+        delim = ',',
+        quote = '"',
+        escape = '"',
+        ignore_errors = true,
+        null_padding = true,
+        new_line = '\\r\\n'
+      )`;
+  }
+
+  private async cleanAndOptimizeTable(filePath: string, finalTable: string): Promise<void> {
     // Drop existing table if it exists
     await this.db.run(`DROP TABLE IF EXISTS ${finalTable}`);
 
+    const source = this.csvSource(filePath);
+
     // Health exports come in several shapes. Quantity CSVs have unit and value,
     // category CSVs have no unit, workout CSVs have neither and carry duration
-    // and energy columns instead. Build the projection from the columns that
-    // are actually present so every shape loads.
-    const stagingColumns = await this.db.execute(`
-      SELECT column_name
-      FROM information_schema.columns
-      WHERE table_name = '${stagingTable}'
-      ORDER BY ordinal_position
-    `);
-    const columnNames: string[] = stagingColumns.map((col: any) => col.column_name);
+    // and energy columns instead. Sniff the columns first so the projection is
+    // built from the columns that are actually present and every shape loads.
+    // DESCRIBE only samples the file; it materializes no rows.
+    const describedColumns = await this.db.execute(`DESCRIBE SELECT * FROM ${source}`);
+    const columnNames: string[] = describedColumns.map((col: any) => col.column_name);
     const columnByLower = new Map<string, string>();
     for (const name of columnNames) {
       columnByLower.set(name.toLowerCase(), name);
     }
 
     const startDateCol = columnByLower.get('startdate');
-    const endDateCol = columnByLower.get('enddate');
     const valueCol = columnByLower.get('value');
     const typeCol = columnByLower.get('type');
 
@@ -105,14 +96,28 @@ export class TableLoader {
       }
     }
 
-    const whereClause = valueCol ? `\n      WHERE ${valueCol} IS NOT NULL` : '';
+    // Keep every row whose startDate can become a timestamp. There is no
+    // history window; an invalid or missing startDate, and a null value where
+    // the shape has a value column, are the only exclusions.
+    const conditions: string[] = [];
+    if (startDateCol) {
+      conditions.push(`TRY_CAST(SUBSTR(${startDateCol}, 1, 19) AS TIMESTAMP) IS NOT NULL`);
+    }
+    if (valueCol) {
+      conditions.push(`${valueCol} IS NOT NULL`);
+    }
+    const whereClause = conditions.length
+      ? `\n      WHERE ${conditions.join('\n        AND ')}`
+      : '';
 
-    // Create optimized table with proper types and indexes
+    // One pass from CSV straight into the typed final table. Staging the raw
+    // rows first would hold both copies resident and roughly double peak memory
+    // for a large export.
     await this.db.run(`
       CREATE TABLE ${finalTable} AS
       SELECT
         ${selectParts.join(',\n        ')}
-      FROM ${stagingTable}${whereClause}
+      FROM ${source}${whereClause}
     `);
 
     // Create indexes for common query patterns
@@ -129,9 +134,6 @@ export class TableLoader {
         ON ${finalTable}(${typeCol})
       `);
     }
-
-    // Drop staging table
-    await this.db.run(`DROP TABLE ${stagingTable}`);
   }
   
   async loadAllTables(): Promise<void> {

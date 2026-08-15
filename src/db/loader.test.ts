@@ -221,6 +221,22 @@ describe('TableLoader quantity tables', () => {
   });
 });
 
+describe('TableLoader staging', () => {
+  test('materializes no staging table for any loaded shape', async () => {
+    await loader.ensureTableLoaded('hkquantitytypeidentifierheartrate');
+    await loader.ensureTableLoaded('hkcategorytypeidentifiersleepanalysis');
+    await loader.ensureTableLoaded('hkworkouttypeidentifiertest');
+    await loader.ensureTableLoaded('hkquantitytypeidentifierrespiratoryrate');
+
+    const leftovers = await db.execute(`
+      SELECT table_name
+      FROM information_schema.tables
+      WHERE table_name LIKE '%_staging'
+    `);
+    expect(leftovers.length).toBe(0);
+  });
+});
+
 describe('TableLoader category tables', () => {
   test('keeps every row including old sleep stages', async () => {
     await loader.ensureTableLoaded('hkcategorytypeidentifiersleepanalysis');
