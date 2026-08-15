@@ -47,7 +47,10 @@ export class TableLoader {
   }
 
   private csvSource(filePath: string): string {
-    return `read_csv('${filePath}',
+    // Paths are not user queries, but a directory name like "Neil's Health"
+    // contains a quote that would end the SQL literal early.
+    const escapedPath = filePath.replace(/'/g, "''");
+    return `read_csv('${escapedPath}',
         header = true,
         skip = 1,
         delim = ',',
@@ -81,6 +84,13 @@ export class TableLoader {
     const valueCol = columnByLower.get('value');
     const typeCol = columnByLower.get('type');
 
+    // Every consumer sorts and filters on startDate. A CSV without that column
+    // is not a loadable health export; fail here with a clear reason instead of
+    // materializing a table that breaks every downstream query.
+    if (!startDateCol) {
+      throw new Error(`CSV has no startDate column: ${filePath}`);
+    }
+
     const selectParts: string[] = [];
     for (const name of columnNames) {
       const lower = name.toLowerCase();
@@ -97,18 +107,15 @@ export class TableLoader {
     }
 
     // Keep every row whose startDate can become a timestamp. There is no
-    // history window; an invalid or missing startDate, and a null value where
-    // the shape has a value column, are the only exclusions.
-    const conditions: string[] = [];
-    if (startDateCol) {
-      conditions.push(`TRY_CAST(SUBSTR(${startDateCol}, 1, 19) AS TIMESTAMP) IS NOT NULL`);
-    }
+    // history window; an invalid startDate, and a null value where the shape
+    // has a value column, are the only exclusions.
+    const conditions: string[] = [
+      `TRY_CAST(SUBSTR(${startDateCol}, 1, 19) AS TIMESTAMP) IS NOT NULL`,
+    ];
     if (valueCol) {
       conditions.push(`${valueCol} IS NOT NULL`);
     }
-    const whereClause = conditions.length
-      ? `\n      WHERE ${conditions.join('\n        AND ')}`
-      : '';
+    const whereClause = `\n      WHERE ${conditions.join('\n        AND ')}`;
 
     // One pass from CSV straight into the typed final table. Staging the raw
     // rows first would hold both copies resident and roughly double peak memory
@@ -121,12 +128,10 @@ export class TableLoader {
     `);
 
     // Create indexes for common query patterns
-    if (startDateCol) {
-      await this.db.run(`
-        CREATE INDEX IF NOT EXISTS idx_${finalTable}_startdate
-        ON ${finalTable}(${startDateCol})
-      `);
-    }
+    await this.db.run(`
+      CREATE INDEX IF NOT EXISTS idx_${finalTable}_startdate
+      ON ${finalTable}(${startDateCol})
+    `);
 
     if (typeCol) {
       await this.db.run(`
