@@ -35,13 +35,11 @@ export class HealthReportTool {
     // Generate report sections
     const sections: ReportSection[] = [];
 
+    // A load or query failure stops the report so the MCP server returns a tool
+    // error. Absent metrics are reported as missing sections, not as failures.
     for (const metric of metrics) {
-      try {
-        const section = await this.generateSection(metric, dateRange);
-        if (section) sections.push(section);
-      } catch (error) {
-        console.error(`Failed to generate ${metric} section:`, error);
-      }
+      const section = await this.generateSection(metric, dateRange);
+      if (section) sections.push(section);
     }
 
     // Create final report
@@ -105,23 +103,16 @@ export class HealthReportTool {
   }
 
   // Tables load on demand, so a report on a cold server has to load what it
-  // needs before querying. Returns the tables that actually exist afterwards -
-  // the loader skips tables with no rows in the rolling window.
+  // needs before querying. A table the export does not contain is an absent
+  // metric, but a load failure is a real error and stops the report.
   private async ensureTables(tableNames: string[]): Promise<string[]> {
     const loaded: string[] = [];
 
     for (const tableName of tableNames) {
       if (!this.catalog.getEntry(tableName)) continue;
 
-      try {
-        await this.loader.ensureTableLoaded(tableName);
-      } catch {
-        continue;
-      }
-
-      if (this.catalog.getEntry(tableName)?.loaded) {
-        loaded.push(tableName);
-      }
+      await this.loader.ensureTableLoaded(tableName);
+      loaded.push(tableName);
     }
 
     return loaded;

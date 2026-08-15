@@ -207,6 +207,69 @@ describe('HealthReportTool workouts', () => {
   });
 });
 
+describe('HealthReportTool over a historical period', () => {
+  test('reports data from an export that contains only old rows', async () => {
+    const oldDir = mkdtempSync(join(tmpdir(), 'health-report-old-'));
+
+    // Fixed 2019 dates: the wall clock must not change this result.
+    const rows: string[] = [];
+    for (let day = 1; day <= 7; day++) {
+      const stamp = `2019-04-0${day} 09:00:00 +0000`;
+      rows.push(
+        `HKQuantityTypeIdentifierHeartRate,Apple Watch,10.0,Watch7,1,${stamp},${stamp},count/min,${64 + day}`
+      );
+    }
+    writeCsv(oldDir, 'HKQuantityTypeIdentifierHeartRate.csv', QUANTITY_HEADER, rows);
+
+    const oldDb = new HealthDataDB({ dataDir: oldDir, maxMemoryMB: 512 });
+    await oldDb.initialize();
+    const catalog = new FileCatalog(oldDir);
+    await catalog.initialize();
+    const loader = new TableLoader(oldDb, catalog);
+    const reportTool = new HealthReportTool(oldDb, new QueryCache(100), catalog, loader);
+
+    const result = await reportTool.execute({
+      report_type: 'custom',
+      start_date: '2019-04-01',
+      end_date: '2019-04-30',
+      include_metrics: ['heart_rate']
+    });
+
+    const data = sectionByTitle(result, 'Heart Rate').data;
+    expect(Number(data.totalReadings)).toBe(7);
+    expect(Number(data.daysWithData)).toBe(7);
+
+    await oldDb.close();
+    rmSync(oldDir, { recursive: true, force: true });
+  });
+});
+
+describe('HealthReportTool when a table cannot load', () => {
+  test('fails the report instead of calling the metric absent', async () => {
+    const brokenDir = mkdtempSync(join(tmpdir(), 'health-report-broken-'));
+    writeFixtures(brokenDir, { heartRateOnly: true });
+
+    const brokenDb = new HealthDataDB({ dataDir: brokenDir, maxMemoryMB: 512 });
+    await brokenDb.initialize();
+    const catalog = new FileCatalog(brokenDir);
+    await catalog.initialize();
+
+    // Point the catalog entry at a file that does not exist so the load throws.
+    const entry = catalog.getEntry('hkquantitytypeidentifierheartrate')!;
+    entry.path = join(brokenDir, 'does-not-exist.csv');
+
+    const loader = new TableLoader(brokenDb, catalog);
+    const reportTool = new HealthReportTool(brokenDb, new QueryCache(100), catalog, loader);
+
+    await expect(
+      reportTool.execute({ report_type: 'weekly', include_metrics: ['heart_rate'] })
+    ).rejects.toThrow(/hkquantitytypeidentifierheartrate/);
+
+    await brokenDb.close();
+    rmSync(brokenDir, { recursive: true, force: true });
+  });
+});
+
 describe('HealthReportTool with a missing metric', () => {
   test('says so instead of dropping the section', async () => {
     const emptyDir = mkdtempSync(join(tmpdir(), 'health-report-empty-'));
