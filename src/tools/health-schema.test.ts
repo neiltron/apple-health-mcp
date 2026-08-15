@@ -229,7 +229,7 @@ describe('HealthSchemaTool with an unreadable export', () => {
 
   test('gives a neutral note that does not blame a date window', () => {
     const details = emptySchema.tableDetails['hkquantitytypeidentifierstepcount'];
-    expect(details.note).toBe('no readable rows in this file');
+    expect(details.note).toBe('no rows loaded from this file (unparseable dates or empty values)');
     expect(details.note).not.toContain('90');
     expect(details.note).not.toContain('window');
   });
