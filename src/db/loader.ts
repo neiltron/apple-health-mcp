@@ -4,12 +4,10 @@ import type { FileCatalog } from './catalog';
 export class TableLoader {
   private db: HealthDataDB;
   private catalog: FileCatalog;
-  private rollingWindowDays: number;
-  
-  constructor(db: HealthDataDB, catalog: FileCatalog, rollingWindowDays: number = 90) {
+
+  constructor(db: HealthDataDB, catalog: FileCatalog) {
     this.db = db;
     this.catalog = catalog;
-    this.rollingWindowDays = rollingWindowDays;
   }
   
   async ensureTableLoaded(tableName: string): Promise<void> {
@@ -30,13 +28,9 @@ export class TableLoader {
     const tempTableName = `${tableName}_staging`;
     
     try {
-      // console.log(`Loading table ${tableName} from ${filePath}`);
-      
-      // Create staging table with recent data only
-      const cutoffDate = new Date();
-      cutoffDate.setDate(cutoffDate.getDate() - this.rollingWindowDays);
-      const cutoffStr = cutoffDate.toISOString().split('T')[0];
-      
+      // Stage every row whose startDate can become a timestamp. There is no
+      // history window; rows with an invalid or missing startDate are the only
+      // ones excluded.
       await this.db.run(`
         CREATE TABLE ${tempTableName} AS
         SELECT * FROM read_csv('${filePath}',
@@ -49,25 +43,21 @@ export class TableLoader {
           null_padding = true,
           new_line = '\\r\\n'
         )
-        WHERE TRY_CAST(SUBSTR(startDate, 1, 19) AS TIMESTAMP) >= '${cutoffStr}'
+        WHERE TRY_CAST(SUBSTR(startDate, 1, 19) AS TIMESTAMP) IS NOT NULL
       `);
-      
-      // Get row count
+
+      // A file with no readable rows still produces an empty final table so
+      // queries return zero rows instead of a missing-table error, and the CSV
+      // is not rescanned on every request.
+      await this.cleanAndOptimizeTable(tempTableName, tableName);
+
+      // Count the final table: cleanAndOptimizeTable also drops rows with a
+      // null value, so the catalog count matches what is actually stored.
       const countResult = await this.db.execute(
-        `SELECT COUNT(*) as count FROM ${tempTableName}`
+        `SELECT COUNT(*) as count FROM ${tableName}`
       );
-      const rowCount = countResult[0]?.count || 0;
-      
-      if (rowCount > 0) {
-        // Clean and create final table
-        await this.cleanAndOptimizeTable(tempTableName, tableName);
-        this.catalog.markLoaded(tableName, rowCount);
-        // console.log(`Loaded ${rowCount} rows into ${tableName}`);
-      } else {
-        // Drop empty staging table
-        await this.db.run(`DROP TABLE IF EXISTS ${tempTableName}`);
-        // console.log(`No recent data found for ${tableName}`);
-      }
+      const rowCount = Number(countResult[0]?.count ?? 0);
+      this.catalog.markLoaded(tableName, rowCount);
     } catch (error) {
       // Clean up on error
       await this.db.run(`DROP TABLE IF EXISTS ${tempTableName}`);
