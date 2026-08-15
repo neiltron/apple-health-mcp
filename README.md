@@ -42,7 +42,7 @@ the same command, arguments, environment, and `stdio` transport.
 | Variable | Required | Default | Purpose |
 | --- | --- | --- | --- |
 | `HEALTH_DATA_DIR` | Yes | — | Directory containing the exported CSV files |
-| `MAX_MEMORY_MB` | No | `1024` | DuckDB memory limit in megabytes |
+| `MAX_MEMORY_MB` | No | `2048` | DuckDB memory limit in megabytes |
 | `CACHE_SIZE` | No | `100` | Maximum number of cached query results |
 
 ## Export health data
@@ -68,18 +68,26 @@ Start with `health_schema`; table names depend on the files in your export.
 See [Querying Apple Health data](https://github.com/neiltron/apple-health-mcp/blob/main/docs/querying.md)
 for the data model and working examples.
 
-## Current limitation: 90-day window
+## History and memory
 
-When a table is first queried, the server currently loads only rows whose
-`startDate` is within the last 90 days. This is a hard-coded implementation
-limit, not a configurable query default. Older data remains in the CSV files
-but is unavailable to tools, and an older export may appear empty. Removing or
-making this behavior configurable is planned.
+The first request that needs a table loads that table's full CSV history. There
+is no date window, so a query can reach as far back as the export goes.
+
+Because every tool can reach the whole configured history, only start this
+server from an MCP client you trust with that data.
+
+Loaded tables are held in memory, and DuckDB is given the `MAX_MEMORY_MB` limit
+described above. Roughly 1 GiB covers a two-year multi-table export, so the
+2048MB default leaves headroom; raise `MAX_MEMORY_MB` for a larger export. The
+server never spills health rows to a temporary directory on disk, so an export
+that does not fit in the limit fails with an explicit error instead.
 
 Other current limitations:
 
 - Only the Simple Health Export CSV layout is supported.
-- The DuckDB database is in memory and is rebuilt for each server process.
+- The DuckDB database is in memory and is rebuilt for each server process, so
+  each launch reloads from the CSV files. Persistent incremental import is
+  planned future work, not current behavior.
 - Device overlap can produce duplicate-looking measurements; queries should
   account for `sourceName` where appropriate.
 - Health reports summarize recorded data and are not medical advice.

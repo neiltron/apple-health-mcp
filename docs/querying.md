@@ -121,9 +121,14 @@ require `start_date` and `end_date` in `YYYY-MM-DD` form. Optional
 `include_metrics` values are `heart_rate`, `activity`, `sleep`, `workouts`, and
 `calories`.
 
-## Current data window
+## Available history
 
-Only records from the last 90 days are loaded at present, even if the CSV files
-contain older history. This is a server limitation rather than a SQL filter;
-removing a date predicate from a query does not expose older rows. The behavior
-is under review.
+The first query that touches a table loads that table's full CSV history, so
+the range a query can reach is whatever the export contains. The date
+predicates in the examples above are query filters you can widen or drop; the
+server adds no window of its own.
+
+A row is omitted only when its `startDate` cannot be parsed as a timestamp, or
+when the file has a `value` column and that row's value is empty. Loaded tables
+live in memory for the life of the server process, bounded by `MAX_MEMORY_MB`
+(2048MB by default); a very large export may need that raised.

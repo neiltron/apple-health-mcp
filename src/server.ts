@@ -53,7 +53,7 @@ const schemaTool = new HealthSchemaTool(db, catalog, loader);
 // Create MCP server
 const server = new Server({
   name: "apple-health-mcp",
-  version: "1.2.1",
+  version: "1.3.0",
 }, {
   capabilities: {
     tools: {}
