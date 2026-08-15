@@ -14,7 +14,7 @@ export class MemoryManager {
     db: HealthDataDB, 
     catalog: FileCatalog, 
     loader: TableLoader,
-    maxMemoryMB: number = 1024
+    maxMemoryMB: number = 2048
   ) {
     this.db = db;
     this.catalog = catalog;
