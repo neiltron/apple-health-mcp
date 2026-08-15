@@ -8,6 +8,8 @@ import { TableLoader } from '../db/loader';
 import { HealthSchemaTool } from './health-schema';
 
 const RECENT_HEART_RATE_ROWS = 120;
+const OLD_HEART_RATE_ROWS = 5;
+const TOTAL_HEART_RATE_ROWS = RECENT_HEART_RATE_ROWS + OLD_HEART_RATE_ROWS;
 
 function formatTimestamp(date: Date): string {
   return `${date.toISOString().slice(0, 19).replace('T', ' ')} +0000`;
@@ -18,6 +20,9 @@ function daysAgo(days: number): Date {
   date.setDate(date.getDate() - days);
   return date;
 }
+
+// A fixed historical date proves the loader cannot depend on the wall clock.
+const OLD_EXPORT_DATE = new Date('2019-04-08T07:15:00Z');
 
 function writeCsv(dir: string, fileName: string, header: string, rows: string[]): void {
   const lines = ['sep=,', header, ...rows];
@@ -40,8 +45,10 @@ beforeAll(async () => {
       `HKQuantityTypeIdentifierHeartRate,Apple Watch,10.0,Watch7,1,${start},${start},count/min,${60 + (i % 40)}`
     );
   }
-  for (let i = 0; i < 5; i++) {
-    const start = formatTimestamp(daysAgo(200 + i));
+  for (let i = 0; i < OLD_HEART_RATE_ROWS; i++) {
+    const old = new Date(OLD_EXPORT_DATE);
+    old.setUTCDate(old.getUTCDate() + i);
+    const start = formatTimestamp(old);
     heartRateRows.push(
       `HKQuantityTypeIdentifierHeartRate,Apple Watch,10.0,Watch7,1,${start},${start},count/min,${50 + i}`
     );
@@ -89,17 +96,25 @@ afterAll(async () => {
 });
 
 describe('HealthSchemaTool', () => {
-  test('loads the full rolling window, not a 100 row sample', async () => {
+  test('loads every row, not a 100 row sample', async () => {
     const result = await db.execute(
       'SELECT COUNT(*) as count FROM hkquantitytypeidentifierheartrate'
     );
-    expect(Number(result[0].count)).toBe(RECENT_HEART_RATE_ROWS);
+    expect(Number(result[0].count)).toBe(TOTAL_HEART_RATE_ROWS);
+  });
+
+  test('reports the full row count and an earliest date years in the past', () => {
+    const stats = schema.tableDetails['hkquantitytypeidentifierheartrate'].statistics;
+    expect(Number(stats.total_rows)).toBe(TOTAL_HEART_RATE_ROWS);
+
+    const earliest = new Date(String(stats.earliest_date)).getTime();
+    expect(earliest).toBe(Date.UTC(2019, 3, 8));
   });
 
   test('records the real row count in the catalog', () => {
     const entry = catalog.getEntry('hkquantitytypeidentifierheartrate');
     expect(entry?.loaded).toBe(true);
-    expect(Number(entry?.rowCount)).toBe(RECENT_HEART_RATE_ROWS);
+    expect(Number(entry?.rowCount)).toBe(TOTAL_HEART_RATE_ROWS);
   });
 
   test('reports the primary unit for a quantity table', () => {
@@ -132,6 +147,53 @@ describe('HealthSchemaTool', () => {
     expect(schema.summary.loadedTables).toBeUndefined();
     expect(schema.summary.tablesInMemory).toBeGreaterThan(0);
     expect(schema.summary.loadingNote).toContain('on demand');
+  });
+});
+
+describe('HealthSchemaTool with an old-only export', () => {
+  let oldDir: string;
+  let oldDb: HealthDataDB;
+  let oldSchema: any;
+
+  beforeAll(async () => {
+    oldDir = mkdtempSync(join(tmpdir(), 'health-schema-old-'));
+
+    const rows: string[] = [];
+    for (let i = 0; i < 20; i++) {
+      const stamp = new Date(OLD_EXPORT_DATE);
+      stamp.setUTCDate(stamp.getUTCDate() + i);
+      const start = formatTimestamp(stamp);
+      rows.push(
+        `HKQuantityTypeIdentifierStepCount,iPhone,18.0,iPhone15,1,${start},${start},count,${7000 + i}`
+      );
+    }
+    writeCsv(
+      oldDir,
+      'HKQuantityTypeIdentifierStepCount.csv',
+      'type,sourceName,sourceVersion,productType,device,startDate,endDate,unit,value',
+      rows
+    );
+
+    oldDb = new HealthDataDB({ dataDir: oldDir, maxMemoryMB: 512 });
+    await oldDb.initialize();
+    const oldCatalog = new FileCatalog(oldDir);
+    await oldCatalog.initialize();
+    const oldLoader = new TableLoader(oldDb, oldCatalog);
+
+    oldSchema = await new HealthSchemaTool(oldDb, oldCatalog, oldLoader).execute();
+  });
+
+  afterAll(async () => {
+    await oldDb.close();
+    rmSync(oldDir, { recursive: true, force: true });
+  });
+
+  test('makes a table whose rows are all years old available', () => {
+    const details = oldSchema.tableDetails['hkquantitytypeidentifierstepcount'];
+    expect(details.available).toBeUndefined();
+    expect(details.note).toBeUndefined();
+    expect(details.error).toBeUndefined();
+    expect(Number(details.statistics.total_rows)).toBe(20);
   });
 });
 
