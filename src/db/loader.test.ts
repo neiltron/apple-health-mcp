@@ -154,6 +154,21 @@ beforeAll(async () => {
     ]
   );
 
+  // Withings-style shape: metadata columns whose header names contain spaces
+  const withingsRows: string[] = [];
+  for (let i = 0; i < 3; i++) {
+    const start = formatTimestamp(daysAfter(OLD_ANCHOR, i));
+    withingsRows.push(
+      `HKQuantityTypeIdentifierHeight,Withings,8070102,"iPhone17,1",1,${start},${start},cm,${180 + i},5.2.1,12345`
+    );
+  }
+  writeCsv(
+    dataDir,
+    'HKQuantityTypeIdentifierHeight.csv',
+    'type,sourceName,sourceVersion,productType,device,startDate,endDate,unit,value,Health Mate App Version,Withings User Identifier',
+    withingsRows
+  );
+
   // No startDate column at all: not a loadable health export shape
   writeCsv(
     dataDir,
@@ -366,6 +381,25 @@ describe('TableLoader shape validation', () => {
       WHERE table_name = 'hkquantitytypeidentifiernodates'
     `);
     expect(tables.length).toBe(0);
+  });
+});
+
+describe('TableLoader header handling', () => {
+  test('loads a CSV whose metadata column names contain spaces', async () => {
+    await loader.ensureTableLoaded('hkquantitytypeidentifierheight');
+
+    const entry = catalog.getEntry('hkquantitytypeidentifierheight');
+    expect(entry?.loaded).toBe(true);
+    expect(entry?.rowCount).toBe(3);
+
+    const rows = await db.execute(`
+      SELECT value, "Health Mate App Version" as appVersion
+      FROM hkquantitytypeidentifierheight
+      ORDER BY startDate
+      LIMIT 1
+    `);
+    expect(Number(rows[0].value)).toBe(180);
+    expect(String(rows[0].appVersion)).toBe('5.2.1');
   });
 });
 
