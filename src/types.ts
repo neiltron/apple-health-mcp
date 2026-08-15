@@ -23,7 +23,6 @@ export interface HealthDataConfig {
   cacheDir?: string;
   maxMemoryMB?: number;
   prewarmCache?: boolean;
-  rollingWindowDays?: number;
 }
 
 export type OutputFormat = 'json' | 'csv' | 'summary';
