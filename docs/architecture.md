@@ -57,22 +57,34 @@ ten-minute TTL. For non-aggregate queries, requests involving `CURRENT_DATE` or
 
 ### Memory management
 
-DuckDB receives the configured memory limit. A periodic manager also estimates
-loaded-table memory from row counts and evicts least-recently-used tables under
-pressure. This estimate is approximate.
+DuckDB receives the configured memory limit, which defaults to 2048MB and is
+overridden by `MAX_MEMORY_MB`. A two-year multi-table export holds roughly
+1 GiB resident, so the default leaves headroom for loading full history.
 
-## The rolling window
+`max_temp_directory_size` is set to `0 bytes`. DuckDB therefore cannot spill to
+a temporary directory, which keeps health rows out of files on disk and turns an
+over-capacity load into an explicit error instead of silent disk use.
 
-Every CSV load currently filters `startDate` against a cutoff computed as 90
-days before the current date. This filter was introduced as a resource-control
-shortcut, but it makes legitimate historical queries impossible and can make
-old exports appear empty. It is hard-coded in the active `TableLoader`
-constructor and is not currently configurable from the server.
+A periodic manager also estimates loaded-table memory from row counts and evicts
+least-recently-used tables under pressure. This estimate is approximate.
 
-The local roadmap tracks an investigation into replacing this behavior. Any
-change should measure startup/query cost with representative exports and decide
-whether the right default is full history, a configurable window, or persistent
-incremental import.
+## History loading
+
+A table's first request loads its full CSV history. There is no date window, so
+the rows a query can reach are limited only by the export itself. A row is
+excluded only when its `startDate` cannot be cast to a timestamp, or when the
+file shape has a `value` column and that value is null.
+
+The load is a single pass: one `CREATE TABLE AS SELECT` reads the CSV straight
+into the typed final table. `TableLoader` sniffs the file's columns with
+`DESCRIBE` first, which samples rather than materializes, so the projection
+matches the quantity, category, or workout shape it was given. Staging raw
+VARCHAR rows in a separate table beforehand would hold two copies resident and
+roughly double peak memory for a large export.
+
+A failed load drops the partially created table and raises. The failure
+propagates to the calling tool rather than leaving an empty table that looks
+like an export with no data.
 
 ## Transport constraints
 
@@ -84,7 +96,8 @@ MCP client and are subject to that client's data handling.
 ## Current boundaries
 
 - Simple Health Export CSV is the only ingest format.
-- The database is in memory; there is no incremental or persistent import.
+- The database is in memory and is rebuilt per process; incremental or
+  persistent import is planned future work.
 - Query validation and lazy-load table detection are string-based.
 - The implementation exposes tools only—no resources, prompts, HTTP transport,
   or hosted service.

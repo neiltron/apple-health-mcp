@@ -8,13 +8,13 @@
     "url": "https://github.com/neiltron/apple-health-mcp",
     "source": "github"
   },
-  "version": "1.2.1",
+  "version": "1.3.0",
   "packages": [
     {
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
       "identifier": "@neiltron/apple-health-mcp",
-      "version": "1.2.1",
+      "version": "1.3.0",
       "runtimeHint": "npx",
       "transport": {
         "type": "stdio"
@@ -30,7 +30,7 @@
           "name": "MAX_MEMORY_MB",
           "description": "Maximum memory usage in megabytes",
           "format": "number",
-          "default": "1024"
+          "default": "2048"
         },
         {
           "name": "CACHE_SIZE",
