@@ -23,7 +23,7 @@ import type { HealthQueryArgs, HealthReportArgs } from "./types.js";
 
 // Get configuration from environment
 const DATA_DIR = process.env.HEALTH_DATA_DIR || './HealthAll_2025-07-202_01-04-39_SimpleHealthExportCSV';
-const MAX_MEMORY_MB = parseInt(process.env.MAX_MEMORY_MB || '1024');
+const MAX_MEMORY_MB = parseInt(process.env.MAX_MEMORY_MB || '2048');
 const CACHE_SIZE = parseInt(process.env.CACHE_SIZE || '100');
 
 // Validate data directory

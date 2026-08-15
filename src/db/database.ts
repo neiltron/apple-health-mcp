@@ -12,7 +12,10 @@ export class HealthDataDB {
 
   constructor(config: HealthDataConfig) {
     this.config = {
-      maxMemoryMB: 1024,
+      // A two-year multi-table export holds roughly 1 GiB resident in DuckDB,
+      // so 2048MB leaves headroom for loading full history. MAX_MEMORY_MB
+      // remains the user override.
+      maxMemoryMB: 2048,
       prewarmCache: false,
       ...config
     };
