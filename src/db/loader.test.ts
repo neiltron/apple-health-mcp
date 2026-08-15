@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { HealthDataDB } from './database';
@@ -10,9 +10,11 @@ const RECENT_ROWS = 120;
 const OLD_ROWS = 5;
 const TOTAL_HEART_RATE_ROWS = RECENT_ROWS + OLD_ROWS;
 
-// Fixed historical anchors keep every assertion independent of the current date.
+// Fixed historical anchors keep every assertion independent of the current
+// date. The old anchor sits decades back so even a generous re-added
+// wall-clock window would fail these tests, not just a 90-day one.
 const RECENT_ANCHOR = new Date('2020-06-01T00:00:00Z');
-const OLD_ANCHOR = new Date('2019-01-15T00:00:00Z');
+const OLD_ANCHOR = new Date('2010-01-15T00:00:00Z');
 
 function formatTimestamp(date: Date): string {
   return `${date.toISOString().slice(0, 19).replace('T', ' ')} +0000`;
@@ -152,6 +154,14 @@ beforeAll(async () => {
     ]
   );
 
+  // No startDate column at all: not a loadable health export shape
+  writeCsv(
+    dataDir,
+    'HKQuantityTypeIdentifierNoDates.csv',
+    'type,sourceName,unit,value',
+    ['HKQuantityTypeIdentifierNoDates,Manual,count,1']
+  );
+
   db = new HealthDataDB({ dataDir, maxMemoryMB: 512 });
   await db.initialize();
   catalog = new FileCatalog(dataDir);
@@ -177,7 +187,7 @@ describe('TableLoader quantity tables', () => {
       SELECT MIN(startDate) as earliest
       FROM hkquantitytypeidentifierheartrate
     `);
-    expect(new Date(oldest[0].earliest).getUTCFullYear()).toBe(2019);
+    expect(new Date(oldest[0].earliest).getUTCFullYear()).toBe(2010);
   });
 
   test('records the stored row count in the catalog', async () => {
@@ -249,7 +259,7 @@ describe('TableLoader category tables', () => {
     const oldStage = await db.execute(`
       SELECT valueText, value
       FROM hkcategorytypeidentifiersleepanalysis
-      WHERE startDate < TIMESTAMP '2019-06-01 00:00:00'
+      WHERE startDate < TIMESTAMP '2010-06-01 00:00:00'
       ORDER BY startDate
       LIMIT 1
     `);
@@ -299,7 +309,7 @@ describe('TableLoader old-only tables', () => {
       FROM hkquantitytypeidentifierstepcount
     `);
     expect(Number(rows[0].count)).toBe(12);
-    expect(new Date(rows[0].latest).getUTCFullYear()).toBe(2019);
+    expect(new Date(rows[0].latest).getUTCFullYear()).toBe(2010);
   });
 });
 
@@ -343,6 +353,55 @@ describe('TableLoader date validation', () => {
   });
 });
 
+describe('TableLoader shape validation', () => {
+  test('rejects a CSV without a startDate column and leaves no table behind', async () => {
+    await expect(
+      loader.ensureTableLoaded('hkquantitytypeidentifiernodates')
+    ).rejects.toThrow('no startDate column');
+
+    expect(catalog.getEntry('hkquantitytypeidentifiernodates')?.loaded).toBe(false);
+    const tables = await db.execute(`
+      SELECT table_name
+      FROM information_schema.tables
+      WHERE table_name = 'hkquantitytypeidentifiernodates'
+    `);
+    expect(tables.length).toBe(0);
+  });
+});
+
+describe('TableLoader path handling', () => {
+  test('loads from a directory whose name contains a quote', async () => {
+    const parent = mkdtempSync(join(tmpdir(), 'health-loader-quote-'));
+    const quotedDir = join(parent, "Neil's Health");
+    mkdirSync(quotedDir);
+    writeCsv(
+      quotedDir,
+      'HKQuantityTypeIdentifierBodyMass.csv',
+      QUANTITY_HEADER,
+      [
+        `HKQuantityTypeIdentifierBodyMass,Withings,1.0,Scale,1,${formatTimestamp(OLD_ANCHOR)},${formatTimestamp(OLD_ANCHOR)},kg,70`
+      ]
+    );
+
+    const quotedDb = new HealthDataDB({ dataDir: quotedDir, maxMemoryMB: 512 });
+    await quotedDb.initialize();
+    const quotedCatalog = new FileCatalog(quotedDir);
+    await quotedCatalog.initialize();
+    const quotedLoader = new TableLoader(quotedDb, quotedCatalog);
+
+    try {
+      await quotedLoader.ensureTableLoaded('hkquantitytypeidentifierbodymass');
+      const rows = await quotedDb.execute(
+        'SELECT COUNT(*) as count FROM hkquantitytypeidentifierbodymass'
+      );
+      expect(Number(rows[0].count)).toBe(1);
+    } finally {
+      await quotedDb.close();
+      rmSync(parent, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('TableLoader workout tables', () => {
   test('loads without error and keeps workout columns queryable', async () => {
     await loader.ensureTableLoaded('hkworkouttypeidentifiertest');
@@ -370,5 +429,67 @@ describe('TableLoader workout tables', () => {
     const names = columns.map((col: any) => String(col.column_name).toLowerCase());
     expect(names).not.toContain('value');
     expect(names).not.toContain('valuetext');
+  });
+});
+
+// Kept last in the file: the rescan test corrupts a fixture CSV on disk.
+describe('TableLoader load mechanics', () => {
+  let spyDb: HealthDataDB;
+  let spyCatalog: FileCatalog;
+  let spyLoader: TableLoader;
+  const statements: string[] = [];
+
+  beforeAll(async () => {
+    spyDb = new HealthDataDB({ dataDir, maxMemoryMB: 512 });
+    await spyDb.initialize();
+    spyCatalog = new FileCatalog(dataDir);
+    await spyCatalog.initialize();
+    spyLoader = new TableLoader(spyDb, spyCatalog);
+
+    const originalRun = spyDb.run.bind(spyDb);
+    const originalExecute = spyDb.execute.bind(spyDb);
+    spyDb.run = (query: string, sessionId?: string) => {
+      statements.push(query);
+      return originalRun(query, sessionId);
+    };
+    spyDb.execute = (query: string, sessionId?: string) => {
+      statements.push(query);
+      return originalExecute(query, sessionId);
+    };
+  });
+
+  afterAll(async () => {
+    await spyDb.close();
+  });
+
+  test('loads in one pass: a single CREATE TABLE, no staging, no date literal', async () => {
+    statements.length = 0;
+    await spyLoader.ensureTableLoaded('hkquantitytypeidentifierheartrate');
+
+    const creates = statements.filter((sql) => /CREATE TABLE/i.test(sql));
+    expect(creates.length).toBe(1);
+    expect(creates[0]).toContain('read_csv');
+    expect(creates[0]).toContain('IS NOT NULL');
+    // No wall-clock window: the load never compares startDate to a literal.
+    expect(creates[0]).not.toMatch(/TIMESTAMP\)\s*[<>=]/);
+    expect(statements.some((sql) => /_staging/i.test(sql))).toBe(false);
+  });
+
+  test('does not rescan the CSV once a table is loaded', async () => {
+    await spyLoader.ensureTableLoaded('hkquantitytypeidentifierstepcount');
+    const before = await spyDb.execute(
+      'SELECT COUNT(*) as count FROM hkquantitytypeidentifierstepcount'
+    );
+
+    // A second call must be served from the loaded table. If it re-read the
+    // file, this corrupted content would error or change the count.
+    writeFileSync(join(dataDir, 'HKQuantityTypeIdentifierStepCount.csv'), 'garbage');
+    await spyLoader.ensureTableLoaded('hkquantitytypeidentifierstepcount');
+
+    const after = await spyDb.execute(
+      'SELECT COUNT(*) as count FROM hkquantitytypeidentifierstepcount'
+    );
+    expect(Number(after[0].count)).toBe(Number(before[0].count));
+    expect(Number(after[0].count)).toBe(12);
   });
 });
