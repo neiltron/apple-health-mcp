@@ -10,6 +10,11 @@ const RECENT_ROWS = 120;
 const OLD_ROWS = 5;
 const TOTAL_HEART_RATE_ROWS = RECENT_ROWS + OLD_ROWS;
 
+// More numeric-looking rows than the sniffer's default ~20,480-row sample, so
+// the type-drift fixture only loads fully when the whole file is sniffed.
+const DRIFT_NUMERIC_ROWS = 21_000;
+const DRIFT_TEXT_ROWS = 500;
+
 // Fixed historical anchors keep every assertion independent of the current
 // date. The old anchor sits decades back so even a generous re-added
 // wall-clock window would fail these tests, not just a 90-day one.
@@ -175,6 +180,30 @@ beforeAll(async () => {
     'HKQuantityTypeIdentifierNoDates.csv',
     'type,sourceName,unit,value',
     ['HKQuantityTypeIdentifierNoDates,Manual,count,1']
+  );
+
+  // Type-drift shape: sourceVersion looks numeric ("10.5") for more rows than
+  // the CSV sniffer samples by default (~20k), then turns non-numeric
+  // ("11.0.1"). A sampled type guess makes every later row a CAST error that
+  // ignore_errors silently drops.
+  const driftRows: string[] = [];
+  for (let i = 0; i < DRIFT_NUMERIC_ROWS; i++) {
+    const start = formatTimestamp(daysAfter(RECENT_ANCHOR, i % 90));
+    driftRows.push(
+      `HKQuantityTypeIdentifierVO2Max,Apple Watch,10.5,Watch7,1,${start},${start},mL/min·kg,${35 + (i % 10)}`
+    );
+  }
+  for (let i = 0; i < DRIFT_TEXT_ROWS; i++) {
+    const start = formatTimestamp(daysAfter(RECENT_ANCHOR, 90 + (i % 30)));
+    driftRows.push(
+      `HKQuantityTypeIdentifierVO2Max,Apple Watch,11.0.1,Watch7,1,${start},${start},mL/min·kg,${40 + (i % 10)}`
+    );
+  }
+  writeCsv(
+    dataDir,
+    'HKQuantityTypeIdentifierVO2Max.csv',
+    QUANTITY_HEADER,
+    driftRows
   );
 
   db = new HealthDataDB({ dataDir, maxMemoryMB: 512 });
@@ -381,6 +410,25 @@ describe('TableLoader shape validation', () => {
       WHERE table_name = 'hkquantitytypeidentifiernodates'
     `);
     expect(tables.length).toBe(0);
+  });
+});
+
+describe('TableLoader type sniffing', () => {
+  test('keeps every row when a metadata column changes type past the sample window', async () => {
+    await loader.ensureTableLoaded('hkquantitytypeidentifiervo2max');
+
+    const rows = await db.execute(
+      'SELECT COUNT(*) as count FROM hkquantitytypeidentifiervo2max'
+    );
+    expect(Number(rows[0].count)).toBe(DRIFT_NUMERIC_ROWS + DRIFT_TEXT_ROWS);
+
+    // The rows after the drift are the ones a sampled type guess would drop.
+    const lateRows = await db.execute(`
+      SELECT COUNT(*) as count
+      FROM hkquantitytypeidentifiervo2max
+      WHERE sourceVersion = '11.0.1'
+    `);
+    expect(Number(lateRows[0].count)).toBe(DRIFT_TEXT_ROWS);
   });
 });
 
