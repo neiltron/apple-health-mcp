@@ -57,6 +57,10 @@ export class TableLoader {
     // Paths are not user queries, but a directory name like "Neil's Health"
     // contains a quote that would end the SQL literal early.
     const escapedPath = filePath.replace(/'/g, "''");
+    // sample_size = -1 sniffs column types from the whole file, not the first
+    // ~20k rows. Metadata columns like sourceVersion look numeric for months
+    // ("10.5") and then stop ("11.0.1"); a sampled DOUBLE guess turns every
+    // later row into a CAST error that ignore_errors silently drops.
     return `read_csv('${escapedPath}',
         header = true,
         skip = 1,
@@ -65,7 +69,8 @@ export class TableLoader {
         escape = '"',
         ignore_errors = true,
         null_padding = true,
-        new_line = '\\r\\n'
+        new_line = '\\r\\n',
+        sample_size = -1
       )`;
   }
 
