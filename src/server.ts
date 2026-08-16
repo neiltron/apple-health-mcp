@@ -5,6 +5,8 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
+  ListPromptsRequestSchema,
+  GetPromptRequestSchema,
   ErrorCode,
   McpError
 } from "@modelcontextprotocol/sdk/types.js";
@@ -19,6 +21,7 @@ import { HealthQueryTool } from "./tools/health-query.js";
 import { HealthReportTool } from "./tools/health-report.js";
 import { HealthSchemaTool } from "./tools/health-schema.js";
 import { jsonReplacer } from "./utils.js";
+import { PROMPTS, buildPromptMessages } from "./prompts.js";
 import type { HealthQueryArgs, HealthReportArgs } from "./types.js";
 
 // Get configuration from environment
@@ -56,7 +59,8 @@ const server = new Server({
   version: "1.3.0",
 }, {
   capabilities: {
-    tools: {}
+    tools: {},
+    prompts: {}
   }
 });
 
@@ -123,6 +127,26 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     }
   ]
 }));
+
+// List prompt templates
+server.setRequestHandler(ListPromptsRequestSchema, async () => ({
+  prompts: PROMPTS
+}));
+
+// Resolve a prompt template into messages
+server.setRequestHandler(GetPromptRequestSchema, async (request) => {
+  try {
+    return buildPromptMessages(
+      request.params.name,
+      (request.params.arguments ?? {}) as Record<string, string | undefined>
+    );
+  } catch (error) {
+    throw new McpError(
+      ErrorCode.InvalidParams,
+      error instanceof Error ? error.message : String(error)
+    );
+  }
+});
 
 // Handle tool calls
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
