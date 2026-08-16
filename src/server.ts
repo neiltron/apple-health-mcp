@@ -7,6 +7,8 @@ import {
   ListToolsRequestSchema,
   ListPromptsRequestSchema,
   GetPromptRequestSchema,
+  ListResourcesRequestSchema,
+  ReadResourceRequestSchema,
   ErrorCode,
   McpError
 } from "@modelcontextprotocol/sdk/types.js";
@@ -60,7 +62,8 @@ const server = new Server({
 }, {
   capabilities: {
     tools: {},
-    prompts: {}
+    prompts: {},
+    resources: {}
   }
 });
 
@@ -145,6 +148,74 @@ server.setRequestHandler(GetPromptRequestSchema, async (request) => {
       ErrorCode.InvalidParams,
       error instanceof Error ? error.message : String(error)
     );
+  }
+});
+
+// List readable resources
+server.setRequestHandler(ListResourcesRequestSchema, async () => ({
+  resources: [
+    {
+      uri: "health://schema",
+      name: "Health data schema",
+      description:
+        "Tables, columns, units, sample rows, and query tips for the loaded export",
+      mimeType: "application/json"
+    },
+    {
+      uri: "health://tables",
+      name: "Available tables",
+      description:
+        "Every queryable table in the export with its load state and row count",
+      mimeType: "application/json"
+    }
+  ]
+}));
+
+// Read a resource
+server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+  const { uri } = request.params;
+
+  switch (uri) {
+    case "health://schema":
+      return {
+        contents: [{
+          uri,
+          mimeType: "application/json",
+          text: JSON.stringify(await schemaTool.execute(), jsonReplacer, 2)
+        }]
+      };
+
+    case "health://tables": {
+      // Pick up files exported after startup; keep the current catalog if the
+      // rescan fails.
+      try {
+        await catalog.refresh();
+      } catch {
+        // keep the existing catalog
+      }
+      // Report table names only; catalog entries also hold local file paths,
+      // which stay out of protocol responses.
+      const tables = Object.entries(catalog.getTableInfo())
+        .map(([name, entry]) => ({
+          name,
+          loaded: entry.loaded,
+          rowCount: entry.rowCount
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+      return {
+        contents: [{
+          uri,
+          mimeType: "application/json",
+          text: JSON.stringify({ totalTables: tables.length, tables }, jsonReplacer, 2)
+        }]
+      };
+    }
+
+    default:
+      throw new McpError(
+        ErrorCode.InvalidParams,
+        `Unknown resource: ${uri}`
+      );
   }
 });
 
