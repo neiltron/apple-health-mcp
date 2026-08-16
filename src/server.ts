@@ -276,8 +276,24 @@ async function main() {
     // console.log('Initializing database...');
     await db.initialize();
     
-    // console.log('Scanning health data files...');
-    await catalog.initialize();
+    // Scan health data files. A missing or unreadable data directory must not
+    // prevent startup: clients can still connect and list tools, and
+    // health_schema reports the empty catalog with a pointer to
+    // HEALTH_DATA_DIR. health_schema's refresh() picks the files up once the
+    // directory appears. Warnings go to stderr; stdout is reserved for the
+    // protocol.
+    try {
+      await catalog.initialize();
+      if (Object.keys(catalog.getTableInfo()).length === 0) {
+        process.stderr.write(
+          `apple-health-mcp: no health CSV files found in HEALTH_DATA_DIR (${DATA_DIR}); starting with no tables\n`
+        );
+      }
+    } catch (error) {
+      process.stderr.write(
+        `apple-health-mcp: could not read HEALTH_DATA_DIR (${DATA_DIR}): ${error instanceof Error ? error.message : String(error)}; starting with no tables\n`
+      );
+    }
     
     // Start memory monitoring
     memoryManager.startMonitoring();
