@@ -6,7 +6,6 @@ import { HealthDataDB } from '../db/database';
 import { FileCatalog } from '../db/catalog';
 import { TableLoader } from '../db/loader';
 import { QueryCache } from '../core/cache';
-import { QueryOptimizer } from '../core/optimizer';
 import { HealthQueryTool } from './health-query';
 
 let dataDir: string;
@@ -30,7 +29,7 @@ beforeAll(async () => {
   const catalog = new FileCatalog(dataDir);
   await catalog.initialize();
   const loader = new TableLoader(db, catalog);
-  tool = new HealthQueryTool(db, new QueryCache(10), new QueryOptimizer(loader));
+  tool = new HealthQueryTool(db, new QueryCache(10), loader);
 });
 
 afterAll(async () => {

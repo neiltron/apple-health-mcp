@@ -177,6 +177,15 @@ export class TableLoader {
     }
   }
   
+  // Queries run against lazily loaded tables, so every table a query touches
+  // must be materialized before execution.
+  async ensureTablesForQuery(query: string): Promise<void> {
+    const requiredTables = this.extractTableNames(query);
+    await Promise.all(
+      requiredTables.map(table => this.ensureTableLoaded(table))
+    );
+  }
+
   extractTableNames(query: string): string[] {
     const tables = new Set<string>();
     const allTables = this.catalog.getAllTables();

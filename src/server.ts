@@ -18,7 +18,6 @@ import { FileCatalog } from "./db/catalog.js";
 import { TableLoader } from "./db/loader.js";
 import { QueryCache } from "./core/cache.js";
 import { MemoryManager } from "./core/memory.js";
-import { QueryOptimizer } from "./core/optimizer.js";
 import { HealthQueryTool } from "./tools/health-query.js";
 import { HealthReportTool } from "./tools/health-report.js";
 import { HealthSchemaTool } from "./tools/health-schema.js";
@@ -48,10 +47,9 @@ const catalog = new FileCatalog(DATA_DIR);
 const loader = new TableLoader(db, catalog);
 const cache = new QueryCache(CACHE_SIZE);
 const memoryManager = new MemoryManager(db, catalog, loader, MAX_MEMORY_MB);
-const optimizer = new QueryOptimizer(loader);
 
 // Initialize tools
-const queryTool = new HealthQueryTool(db, cache, optimizer);
+const queryTool = new HealthQueryTool(db, cache, loader);
 const reportTool = new HealthReportTool(db, cache, catalog, loader);
 const schemaTool = new HealthSchemaTool(db, catalog, loader);
 
