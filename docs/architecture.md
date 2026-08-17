@@ -25,8 +25,8 @@ The process owns one DuckDB database. Nothing is persisted between launches.
 
 `src/db/catalog.ts` recognizes quantity, category, and workout CSV filenames.
 Filename suffixes such as export dates are removed from the table name.
-`src/core/optimizer.ts` finds catalog table names mentioned in a SQL query and
-asks the loader to materialize those tables before execution.
+`src/db/loader.ts` finds catalog table names mentioned in a SQL query and
+materializes those tables before execution (`ensureTablesForQuery`).
 
 The name detection is intentionally simple substring matching, not a SQL
 parser. A query can only trigger loading for a table already known to the

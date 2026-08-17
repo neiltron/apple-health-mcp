@@ -1,34 +1,33 @@
 import type { HealthDataDB } from '../db/database';
 import type { QueryCache } from '../core/cache';
-import type { QueryOptimizer } from '../core/optimizer';
+import type { TableLoader } from '../db/loader';
 import type { HealthQueryArgs, QueryResult, OutputFormat } from '../types';
 
 export class HealthQueryTool {
   private db: HealthDataDB;
   private cache: QueryCache;
-  private optimizer: QueryOptimizer;
-  
-  constructor(db: HealthDataDB, cache: QueryCache, optimizer: QueryOptimizer) {
+  private loader: TableLoader;
+
+  constructor(db: HealthDataDB, cache: QueryCache, loader: TableLoader) {
     this.db = db;
     this.cache = cache;
-    this.optimizer = optimizer;
+    this.loader = loader;
   }
-  
+
   async execute(args: HealthQueryArgs): Promise<any> {
     const { query, format = 'json' } = args;
-    
+
     // Validate query
     this.validateQuery(query);
-    
-    // Optimize query
-    const optimizedQuery = await this.optimizer.optimizeQuery(query);
-    
+
+    await this.loader.ensureTablesForQuery(query);
+
     // Execute with caching
     const result = await this.cache.getOrExecute(
-      optimizedQuery,
+      query,
       async () => {
         const startTime = Date.now();
-        const rows = await this.db.execute(optimizedQuery);
+        const rows = await this.db.execute(query);
         const executionTime = Date.now() - startTime;
         
         return {
