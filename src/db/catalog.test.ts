@@ -199,10 +199,13 @@ describe('FileCatalog multi-format conflict', () => {
     writeCsv(mixedDir, 'HKQuantityTypeIdentifierHeartRate.csv', QUANTITY_HEADER, [quantityRow()]);
 
     const fake = fakeClaimingImporter();
-    let fakeClaims = false;
+    let fakeMode: 'quiet' | 'claim' | 'throw' = 'quiet';
     const toggleableFake: FormatImporter = {
       ...fake,
-      detect: async () => ({ claimed: fakeClaims, tables: [] })
+      detect: async () => {
+        if (fakeMode === 'throw') throw new Error('disk on fire');
+        return { claimed: fakeMode === 'claim', tables: [] };
+      }
     };
     const registry = new ImporterRegistry([new SimpleCsvImporter(), toggleableFake]);
     const mixedCatalog = new FileCatalog(mixedDir, registry);
@@ -215,7 +218,7 @@ describe('FileCatalog multi-format conflict', () => {
     // A second format appears: refresh fails, catalog and loaded state kept,
     // conflict recorded with both display names.
     mixedCatalog.markLoaded('hkquantitytypeidentifierheartrate', 3);
-    fakeClaims = true;
+    fakeMode = 'claim';
     await expect(mixedCatalog.refresh()).rejects.toThrow(MultipleFormatsError);
 
     const conflict = mixedCatalog.getScanConflict();
@@ -223,8 +226,20 @@ describe('FileCatalog multi-format conflict', () => {
     expect(conflict?.message).toContain('separate directories');
     expect(mixedCatalog.getEntry('hkquantitytypeidentifierheartrate')?.loaded).toBe(true);
 
+    // A later scan failure with a different cause supersedes the conflict:
+    // the status reflects the most recent scan outcome, so a fixed conflict
+    // is not still reported while an unrelated failure is the real problem.
+    fakeMode = 'throw';
+    await expect(mixedCatalog.refresh()).rejects.toThrow('Failed to catalog');
+    expect(mixedCatalog.getScanConflict()).toBeNull();
+
+    // A still-present conflict re-records on the next completed detection.
+    fakeMode = 'claim';
+    await expect(mixedCatalog.refresh()).rejects.toThrow(MultipleFormatsError);
+    expect(mixedCatalog.getScanConflict()?.formats).toContain('Fake JSON Export');
+
     // Removing the second format clears the conflict on the next scan.
-    fakeClaims = false;
+    fakeMode = 'quiet';
     await mixedCatalog.refresh();
     expect(mixedCatalog.getScanConflict()).toBeNull();
 

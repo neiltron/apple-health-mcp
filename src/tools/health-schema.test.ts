@@ -276,6 +276,14 @@ describe('HealthSchemaTool workout classification', () => {
     writeCsv(kindDir, 'HKWorkoutTypeIdentifierTest.csv', workoutHeader, [
       `HKWorkoutTypeIdentifierTest,Apple Watch,10.0,${stamp},${stamp},1800,400,5.5`
     ]);
+    // A real workout-named quantity identifier (iOS 18+): stays out of the
+    // workout classification but keeps its sampled details and unit hints.
+    writeCsv(
+      kindDir,
+      'HKQuantityTypeIdentifierWorkoutEffortScore.csv',
+      'type,sourceName,sourceVersion,productType,device,startDate,endDate,unit,value',
+      [`HKQuantityTypeIdentifierWorkoutEffortScore,Apple Watch,10.0,Watch7,1,${stamp},${stamp},appleEffortScore,5`]
+    );
 
     const kindDb = new HealthDataDB({ dataDir: kindDir, maxMemoryMB: 512 });
     await kindDb.initialize();
@@ -288,6 +296,11 @@ describe('HealthSchemaTool workout classification', () => {
     expect(result.commonPatterns.workouts).toEqual(['hkworkoutactivitytyperunning']);
     // Matches what health_report selects: the same kind metadata.
     expect(kindCatalog.getTablesByKind('workout')).toEqual(['hkworkoutactivitytyperunning']);
+    // The workout-named quantity table is still listed, still sampled for
+    // details/units — just not classified as a workout source.
+    expect(result.availableTables).toContain('hkquantitytypeidentifierworkouteffortscore');
+    expect(result.tableDetails['hkquantitytypeidentifierworkouteffortscore']).toBeDefined();
+    expect(result.commonPatterns.workouts).not.toContain('hkquantitytypeidentifierworkouteffortscore');
 
     await kindDb.close();
     rmSync(kindDir, { recursive: true, force: true });

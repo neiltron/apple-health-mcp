@@ -195,11 +195,23 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
       // Report table names only; catalog entries also hold local file paths
       // and importer references, which stay out of protocol responses.
       const tables = projectTableInfo(catalog.getTableInfo());
+      // Keep parity with health_schema: a recorded multi-format conflict is
+      // visible on this surface too, so resource-only clients learn that new
+      // files are not being picked up.
+      const conflict = catalog.getScanConflict();
       return {
         contents: [{
           uri,
           mimeType: "application/json",
-          text: JSON.stringify({ totalTables: tables.length, tables }, jsonReplacer, 2)
+          text: JSON.stringify(
+            {
+              totalTables: tables.length,
+              tables,
+              ...(conflict ? { scanWarning: conflict.message } : {})
+            },
+            jsonReplacer,
+            2
+          )
         }]
       };
     }

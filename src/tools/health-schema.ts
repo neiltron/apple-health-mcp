@@ -47,7 +47,10 @@ export class HealthSchemaTool {
     // source health_report uses.
     const workoutTables = new Set(this.catalog.getTablesByKind('workout'));
 
-    // Load a sample from key tables to show structure (including workouts/distance for unit hints)
+    // Load a sample from key tables to show structure (including workouts/distance
+    // for unit hints). Sampling keeps the name heuristic alongside the kind so
+    // workout-adjacent quantity tables (e.g. WorkoutEffortScore) still get
+    // their details and unit hints shown; classification below stays kind-only.
     const sampleTables = availableTables
       .filter(name =>
         name.includes('heartrate') ||
@@ -56,6 +59,7 @@ export class HealthSchemaTool {
         name.includes('activeenergyburned') ||
         name.includes('distancewalkingrunning') ||
         name.includes('distancecycling') ||
+        name.includes('workout') ||
         workoutTables.has(name)
       )
       .slice(0, 8);

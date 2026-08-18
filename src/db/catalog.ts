@@ -61,6 +61,11 @@ export class FileCatalog {
         this.scanConflict = { formats: error.formats, message: error.message };
         throw error;
       }
+      // A non-conflict failure supersedes any recorded conflict: the status
+      // always reflects the most recent scan outcome. Clearing is non-lossy —
+      // a conflict that still exists re-records on the next completed
+      // detection.
+      this.scanConflict = null;
       throw new Error(`Failed to catalog health data files: ${error}`);
     }
 

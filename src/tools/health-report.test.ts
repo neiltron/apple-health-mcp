@@ -285,3 +285,46 @@ describe('HealthReportTool with a missing metric', () => {
     rmSync(emptyDir, { recursive: true, force: true });
   });
 });
+
+describe('HealthReportTool workout kind exclusion', () => {
+  test('selects only workout-kind tables, not workout-named quantity or other tables', async () => {
+    const kindDir = mkdtempSync(join(tmpdir(), 'health-report-kind-'));
+    writeFixtures(kindDir, { heartRateOnly: true });
+
+    // One genuine workout table with two workouts.
+    const rows: string[] = [];
+    for (let day = 1; day <= 2; day++) {
+      const start = formatTimestamp(dayAt(day, 17));
+      const end = formatTimestamp(dayAt(day, 17, WORKOUT_MINUTES));
+      rows.push(`HKWorkoutActivityTypeRunning,Apple Watch,10.0,${start},${end},${WORKOUT_MINUTES},400,5.5`);
+    }
+    writeCsv(kindDir, 'HKWorkoutActivityTypeRunning.csv', WORKOUT_HEADER, rows);
+
+    // Recognized but unverified family: contains "workout", kind is `other`,
+    // and must not feed the workout section.
+    const start = formatTimestamp(dayAt(3, 17));
+    const end = formatTimestamp(dayAt(3, 17, WORKOUT_MINUTES));
+    writeCsv(kindDir, 'HKWorkoutTypeIdentifierTest.csv', WORKOUT_HEADER, [
+      `HKWorkoutTypeIdentifierTest,Apple Watch,10.0,${start},${end},${WORKOUT_MINUTES},400,5.5`
+    ]);
+
+    const kindDb = new HealthDataDB({ dataDir: kindDir, maxMemoryMB: 512 });
+    await kindDb.initialize();
+    const kindCatalog = new FileCatalog(kindDir, defaultRegistry());
+    await kindCatalog.initialize();
+    const kindLoader = new TableLoader(kindDb, kindCatalog);
+    const kindReport = await new HealthReportTool(
+      kindDb,
+      new QueryCache(100),
+      kindCatalog,
+      kindLoader
+    ).execute({ report_type: 'weekly' });
+
+    const data = sectionByTitle(kindReport, 'Workouts').data;
+    expect(Number(data.totalWorkouts)).toBe(2);
+    expect(Number(data.workoutTypes)).toBe(1);
+
+    await kindDb.close();
+    rmSync(kindDir, { recursive: true, force: true });
+  });
+});
