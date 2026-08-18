@@ -143,6 +143,16 @@ Strava) also omit statistics children entirely, carrying only `duration`.
 - 16 activity types observed; cycling, walking, strength training, and
   running dominate.
 
+## Duplicate records
+
+Records can appear multiple times with identical type, dates, and value — up
+to 8 copies of a single manually-logged entry were observed, beyond the
+documented correlation duplication (likely device/app sync artifacts). An
+importer that wants counts to match the Health app must dedupe on
+(type, startDate, endDate, value, sourceName) or accept inflated sums for
+affected types. The Simple Health Export CSV path has the same underlying
+data, so whatever policy is chosen should apply to both formats.
+
 ## Correlation
 
 `Correlation` groups records (food nutrition sets, blood pressure
