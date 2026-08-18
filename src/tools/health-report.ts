@@ -119,7 +119,7 @@ export class HealthReportTool {
   }
 
   private getWorkoutTables(): string[] {
-    return this.catalog.getAllTables().filter(name => name.startsWith('hkworkoutactivitytype'));
+    return this.catalog.getTablesByKind('workout');
   }
 
   private missingSection(title: string, metricLabel: string): ReportSection {

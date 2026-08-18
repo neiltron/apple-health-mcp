@@ -8,6 +8,8 @@ import { defaultRegistry } from '../importers';
 import { TableLoader } from '../db/loader';
 import { HealthSchemaTool } from './health-schema';
 import { writeCsv, formatTimestamp, daysAgo } from '../test-helpers/csv-fixtures';
+import { ImporterRegistry } from '../importers/registry';
+import { SimpleCsvImporter } from '../importers/simple-csv/importer';
 
 const RECENT_HEART_RATE_ROWS = 120;
 const OLD_HEART_RATE_ROWS = 5;
@@ -257,5 +259,76 @@ describe('HealthSchemaTool rescan', () => {
       LIMIT 1
     `);
     expect(Number(rows[0].duration)).toBeGreaterThan(0);
+  });
+});
+
+describe('HealthSchemaTool workout classification', () => {
+  test('workout guidance uses catalog kinds, not name matching', async () => {
+    const kindDir = mkdtempSync(join(tmpdir(), 'health-schema-kind-'));
+    const stamp = formatTimestamp(daysAgo(1));
+    const workoutHeader =
+      'type,sourceName,sourceVersion,startDate,endDate,duration,totalEnergyBurned,totalDistance';
+    writeCsv(kindDir, 'HKWorkoutActivityTypeRunning.csv', workoutHeader, [
+      `HKWorkoutActivityTypeRunning,Apple Watch,10.0,${stamp},${stamp},1800,400,5.5`
+    ]);
+    // Contains "workout" in the name but is not a verified workout family;
+    // kind-based classification excludes it where substring matching would not.
+    writeCsv(kindDir, 'HKWorkoutTypeIdentifierTest.csv', workoutHeader, [
+      `HKWorkoutTypeIdentifierTest,Apple Watch,10.0,${stamp},${stamp},1800,400,5.5`
+    ]);
+
+    const kindDb = new HealthDataDB({ dataDir: kindDir, maxMemoryMB: 512 });
+    await kindDb.initialize();
+    const kindCatalog = new FileCatalog(kindDir, defaultRegistry());
+    await kindCatalog.initialize();
+    const kindLoader = new TableLoader(kindDb, kindCatalog);
+
+    const result = await new HealthSchemaTool(kindDb, kindCatalog, kindLoader).execute();
+
+    expect(result.commonPatterns.workouts).toEqual(['hkworkoutactivitytyperunning']);
+    // Matches what health_report selects: the same kind metadata.
+    expect(kindCatalog.getTablesByKind('workout')).toEqual(['hkworkoutactivitytyperunning']);
+
+    await kindDb.close();
+    rmSync(kindDir, { recursive: true, force: true });
+  });
+});
+
+describe('HealthSchemaTool with a mixed-format directory', () => {
+  test('surfaces the multi-format conflict instead of the empty-directory hint', async () => {
+    const mixedDir = mkdtempSync(join(tmpdir(), 'health-schema-mixed-'));
+    const stamp = formatTimestamp(daysAgo(1));
+    writeCsv(
+      mixedDir,
+      'HKQuantityTypeIdentifierHeartRate.csv',
+      'type,sourceName,sourceVersion,productType,device,startDate,endDate,unit,value',
+      [`HKQuantityTypeIdentifierHeartRate,Apple Watch,10.0,Watch7,1,${stamp},${stamp},count/min,72`]
+    );
+
+    const fakeImporter = {
+      id: 'fake-json',
+      displayName: 'Fake JSON Export',
+      detect: async () => ({ claimed: true, tables: [] }),
+      load: async () => 0
+    };
+    const mixedDb = new HealthDataDB({ dataDir: mixedDir, maxMemoryMB: 512 });
+    await mixedDb.initialize();
+    const mixedCatalog = new FileCatalog(
+      mixedDir,
+      new ImporterRegistry([new SimpleCsvImporter(), fakeImporter])
+    );
+    // Startup conflict: the server's degrade-don't-die handler swallows this.
+    await mixedCatalog.initialize().catch(() => {});
+    const mixedLoader = new TableLoader(mixedDb, mixedCatalog);
+
+    const result = await new HealthSchemaTool(mixedDb, mixedCatalog, mixedLoader).execute();
+
+    expect(result.error).toContain('Simple Health Export CSV');
+    expect(result.error).toContain('Fake JSON Export');
+    expect(result.suggestion).toContain('separate directories');
+    expect(result.suggestion).not.toContain('Check that HEALTH_DATA_DIR contains CSV files');
+
+    await mixedDb.close();
+    rmSync(mixedDir, { recursive: true, force: true });
   });
 });

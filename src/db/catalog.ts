@@ -1,5 +1,6 @@
 import type { CatalogEntry } from '../types';
 import type { ImporterRegistry } from '../importers/registry';
+import type { TableKind } from '../importers/types';
 import { MultipleFormatsError } from '../importers/registry';
 
 // Recorded when a scan finds more than one export format in the data
@@ -129,6 +130,14 @@ export class FileCatalog {
 
   getAllTables(): string[] {
     return Array.from(this.catalog.keys());
+  }
+
+  // The one place table classification lives: kinds come from detection, so
+  // tools never pattern-match table names.
+  getTablesByKind(kind: TableKind): string[] {
+    return Array.from(this.catalog.entries())
+      .filter(([_, entry]) => entry.kind === kind)
+      .map(([name]) => name);
   }
 
   getTableInfo(): Record<string, CatalogEntry> {
