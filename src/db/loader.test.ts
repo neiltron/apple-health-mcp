@@ -4,7 +4,15 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { HealthDataDB } from './database';
 import { FileCatalog } from './catalog';
+import { defaultRegistry } from '../importers';
 import { TableLoader } from './loader';
+import {
+  writeCsv,
+  formatTimestamp,
+  daysAfter,
+  QUANTITY_HEADER,
+  CATEGORY_HEADER
+} from '../test-helpers/csv-fixtures';
 
 const RECENT_ROWS = 120;
 const OLD_ROWS = 5;
@@ -20,26 +28,6 @@ const DRIFT_TEXT_ROWS = 500;
 // wall-clock window would fail these tests, not just a 90-day one.
 const RECENT_ANCHOR = new Date('2020-06-01T00:00:00Z');
 const OLD_ANCHOR = new Date('2010-01-15T00:00:00Z');
-
-function formatTimestamp(date: Date): string {
-  return `${date.toISOString().slice(0, 19).replace('T', ' ')} +0000`;
-}
-
-function daysAfter(anchor: Date, days: number): Date {
-  const date = new Date(anchor);
-  date.setDate(date.getDate() + days);
-  return date;
-}
-
-function writeCsv(dir: string, fileName: string, header: string, rows: string[]): void {
-  const lines = ['sep=,', header, ...rows];
-  writeFileSync(join(dir, fileName), lines.join('\r\n') + '\r\n');
-}
-
-const QUANTITY_HEADER =
-  'type,sourceName,sourceVersion,productType,device,startDate,endDate,unit,value';
-const CATEGORY_HEADER =
-  'type,sourceName,sourceVersion,productType,device,startDate,endDate,value';
 
 function quantityRow(start: string, value: number): string {
   return `HKQuantityTypeIdentifierHeartRate,Apple Watch,10.0,Watch7,1,${start},${start},count/min,${value}`;
@@ -208,7 +196,7 @@ beforeAll(async () => {
 
   db = new HealthDataDB({ dataDir, maxMemoryMB: 512 });
   await db.initialize();
-  catalog = new FileCatalog(dataDir);
+  catalog = new FileCatalog(dataDir, defaultRegistry());
   await catalog.initialize();
   loader = new TableLoader(db, catalog);
 });
@@ -467,7 +455,7 @@ describe('TableLoader path handling', () => {
 
     const quotedDb = new HealthDataDB({ dataDir: quotedDir, maxMemoryMB: 512 });
     await quotedDb.initialize();
-    const quotedCatalog = new FileCatalog(quotedDir);
+    const quotedCatalog = new FileCatalog(quotedDir, defaultRegistry());
     await quotedCatalog.initialize();
     const quotedLoader = new TableLoader(quotedDb, quotedCatalog);
 
@@ -524,7 +512,7 @@ describe('TableLoader load mechanics', () => {
   beforeAll(async () => {
     spyDb = new HealthDataDB({ dataDir, maxMemoryMB: 512 });
     await spyDb.initialize();
-    spyCatalog = new FileCatalog(dataDir);
+    spyCatalog = new FileCatalog(dataDir, defaultRegistry());
     await spyCatalog.initialize();
     spyLoader = new TableLoader(spyDb, spyCatalog);
 

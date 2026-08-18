@@ -1,8 +1,14 @@
+import type { FormatImporter, TableKind } from './importers/types';
+
 export interface CatalogEntry {
   path: string;
   loaded: boolean;
   rowCount: number | null;
   lastAccessed?: Date;
+  // Attached by the registry at scan time; stripped from all serialized
+  // catalog output (health_schema, health://tables).
+  kind?: TableKind;
+  importer?: FormatImporter;
 }
 
 export interface QueryResult {

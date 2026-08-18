@@ -4,24 +4,23 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { HealthDataDB } from '../db/database';
 import { FileCatalog } from '../db/catalog';
+import { defaultRegistry } from '../importers';
 import { TableLoader } from '../db/loader';
 import { QueryCache } from '../core/cache';
 import { HealthReportTool } from './health-report';
+import {
+  writeCsv,
+  formatTimestamp,
+  daysAgo,
+  QUANTITY_HEADER,
+  CATEGORY_HEADER,
+  WORKOUT_HEADER
+} from '../test-helpers/csv-fixtures';
 
 const SLEEP_NIGHTS = 10;
 const ASLEEP_HOURS_PER_NIGHT = 8;
 const IN_BED_HOURS_PER_NIGHT = 9;
 const WORKOUT_MINUTES = 30;
-
-function formatTimestamp(date: Date): string {
-  return `${date.toISOString().slice(0, 19).replace('T', ' ')} +0000`;
-}
-
-function daysAgo(days: number): Date {
-  const date = new Date();
-  date.setDate(date.getDate() - days);
-  return date;
-}
 
 // Pin a time of day so every row for a night lands on the same calendar date.
 function dayAt(days: number, hours: number, minutes: number = 0): Date {
@@ -29,15 +28,6 @@ function dayAt(days: number, hours: number, minutes: number = 0): Date {
   date.setUTCHours(hours, minutes, 0, 0);
   return date;
 }
-
-function writeCsv(dir: string, fileName: string, header: string, rows: string[]): void {
-  const lines = ['sep=,', header, ...rows];
-  writeFileSync(join(dir, fileName), lines.join('\r\n') + '\r\n');
-}
-
-const QUANTITY_HEADER = 'type,sourceName,sourceVersion,productType,device,startDate,endDate,unit,value';
-const CATEGORY_HEADER = 'type,sourceName,sourceVersion,productType,device,startDate,endDate,value';
-const WORKOUT_HEADER = 'type,sourceName,sourceVersion,startDate,endDate,duration,totalEnergyBurned,totalDistance';
 
 function writeFixtures(dir: string, options: { heartRateOnly?: boolean } = {}): void {
   const heartRateRows: string[] = [];
@@ -132,7 +122,7 @@ beforeAll(async () => {
   // Cold server: nothing loaded before the report runs.
   db = new HealthDataDB({ dataDir, maxMemoryMB: 512 });
   await db.initialize();
-  const catalog = new FileCatalog(dataDir);
+  const catalog = new FileCatalog(dataDir, defaultRegistry());
   await catalog.initialize();
   const loader = new TableLoader(db, catalog);
   const cache = new QueryCache(100);
@@ -223,7 +213,7 @@ describe('HealthReportTool over a historical period', () => {
 
     const oldDb = new HealthDataDB({ dataDir: oldDir, maxMemoryMB: 512 });
     await oldDb.initialize();
-    const catalog = new FileCatalog(oldDir);
+    const catalog = new FileCatalog(oldDir, defaultRegistry());
     await catalog.initialize();
     const loader = new TableLoader(oldDb, catalog);
     const reportTool = new HealthReportTool(oldDb, new QueryCache(100), catalog, loader);
@@ -251,7 +241,7 @@ describe('HealthReportTool when a table cannot load', () => {
 
     const brokenDb = new HealthDataDB({ dataDir: brokenDir, maxMemoryMB: 512 });
     await brokenDb.initialize();
-    const catalog = new FileCatalog(brokenDir);
+    const catalog = new FileCatalog(brokenDir, defaultRegistry());
     await catalog.initialize();
 
     // Point the catalog entry at a file that does not exist so the load throws.
@@ -277,7 +267,7 @@ describe('HealthReportTool with a missing metric', () => {
 
     const emptyDb = new HealthDataDB({ dataDir: emptyDir, maxMemoryMB: 512 });
     await emptyDb.initialize();
-    const catalog = new FileCatalog(emptyDir);
+    const catalog = new FileCatalog(emptyDir, defaultRegistry());
     await catalog.initialize();
     const loader = new TableLoader(emptyDb, catalog);
     const reportTool = new HealthReportTool(emptyDb, new QueryCache(100), catalog, loader);
@@ -293,5 +283,48 @@ describe('HealthReportTool with a missing metric', () => {
 
     await emptyDb.close();
     rmSync(emptyDir, { recursive: true, force: true });
+  });
+});
+
+describe('HealthReportTool workout kind exclusion', () => {
+  test('selects only workout-kind tables, not workout-named quantity or other tables', async () => {
+    const kindDir = mkdtempSync(join(tmpdir(), 'health-report-kind-'));
+    writeFixtures(kindDir, { heartRateOnly: true });
+
+    // One genuine workout table with two workouts.
+    const rows: string[] = [];
+    for (let day = 1; day <= 2; day++) {
+      const start = formatTimestamp(dayAt(day, 17));
+      const end = formatTimestamp(dayAt(day, 17, WORKOUT_MINUTES));
+      rows.push(`HKWorkoutActivityTypeRunning,Apple Watch,10.0,${start},${end},${WORKOUT_MINUTES},400,5.5`);
+    }
+    writeCsv(kindDir, 'HKWorkoutActivityTypeRunning.csv', WORKOUT_HEADER, rows);
+
+    // Recognized but unverified family: contains "workout", kind is `other`,
+    // and must not feed the workout section.
+    const start = formatTimestamp(dayAt(3, 17));
+    const end = formatTimestamp(dayAt(3, 17, WORKOUT_MINUTES));
+    writeCsv(kindDir, 'HKWorkoutTypeIdentifierTest.csv', WORKOUT_HEADER, [
+      `HKWorkoutTypeIdentifierTest,Apple Watch,10.0,${start},${end},${WORKOUT_MINUTES},400,5.5`
+    ]);
+
+    const kindDb = new HealthDataDB({ dataDir: kindDir, maxMemoryMB: 512 });
+    await kindDb.initialize();
+    const kindCatalog = new FileCatalog(kindDir, defaultRegistry());
+    await kindCatalog.initialize();
+    const kindLoader = new TableLoader(kindDb, kindCatalog);
+    const kindReport = await new HealthReportTool(
+      kindDb,
+      new QueryCache(100),
+      kindCatalog,
+      kindLoader
+    ).execute({ report_type: 'weekly' });
+
+    const data = sectionByTitle(kindReport, 'Workouts').data;
+    expect(Number(data.totalWorkouts)).toBe(2);
+    expect(Number(data.workoutTypes)).toBe(1);
+
+    await kindDb.close();
+    rmSync(kindDir, { recursive: true, force: true });
   });
 });
