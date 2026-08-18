@@ -21,7 +21,9 @@ Tests use Bun. The published runtime requires Node.js 22 or newer.
 ## Code map
 
 - `src/server.ts`: configuration, MCP tool schemas, dispatch, and stdio startup
-- `src/db/`: CSV catalog, lazy table loader, and DuckDB wrapper
+- `src/importers/`: per-format ingestion (detection and loading) behind the
+  `FormatImporter` interface, plus the single-format registry
+- `src/db/`: format-agnostic catalog, lazy table loader, and DuckDB wrapper
 - `src/tools/`: implementations of `health_schema`, `health_query`, and
   `health_report`
 - `src/core/`: query caching, lazy-load coordination, and memory management

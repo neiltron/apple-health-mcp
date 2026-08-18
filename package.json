@@ -1,6 +1,6 @@
 {
   "name": "@neiltron/apple-health-mcp",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "mcpName": "io.github.neiltron/apple-health-mcp",
   "description": "MCP server for querying Apple Health data with DuckDB",
   "main": "dist/server.js",
