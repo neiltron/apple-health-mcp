@@ -7,21 +7,19 @@ import { FileCatalog } from '../db/catalog';
 import { TableLoader } from '../db/loader';
 import { QueryCache } from '../core/cache';
 import { HealthReportTool } from './health-report';
+import {
+  writeCsv,
+  formatTimestamp,
+  daysAgo,
+  QUANTITY_HEADER,
+  CATEGORY_HEADER,
+  WORKOUT_HEADER
+} from '../test-helpers/csv-fixtures';
 
 const SLEEP_NIGHTS = 10;
 const ASLEEP_HOURS_PER_NIGHT = 8;
 const IN_BED_HOURS_PER_NIGHT = 9;
 const WORKOUT_MINUTES = 30;
-
-function formatTimestamp(date: Date): string {
-  return `${date.toISOString().slice(0, 19).replace('T', ' ')} +0000`;
-}
-
-function daysAgo(days: number): Date {
-  const date = new Date();
-  date.setDate(date.getDate() - days);
-  return date;
-}
 
 // Pin a time of day so every row for a night lands on the same calendar date.
 function dayAt(days: number, hours: number, minutes: number = 0): Date {
@@ -29,15 +27,6 @@ function dayAt(days: number, hours: number, minutes: number = 0): Date {
   date.setUTCHours(hours, minutes, 0, 0);
   return date;
 }
-
-function writeCsv(dir: string, fileName: string, header: string, rows: string[]): void {
-  const lines = ['sep=,', header, ...rows];
-  writeFileSync(join(dir, fileName), lines.join('\r\n') + '\r\n');
-}
-
-const QUANTITY_HEADER = 'type,sourceName,sourceVersion,productType,device,startDate,endDate,unit,value';
-const CATEGORY_HEADER = 'type,sourceName,sourceVersion,productType,device,startDate,endDate,value';
-const WORKOUT_HEADER = 'type,sourceName,sourceVersion,startDate,endDate,duration,totalEnergyBurned,totalDistance';
 
 function writeFixtures(dir: string, options: { heartRateOnly?: boolean } = {}): void {
   const heartRateRows: string[] = [];

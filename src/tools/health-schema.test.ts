@@ -6,28 +6,14 @@ import { HealthDataDB } from '../db/database';
 import { FileCatalog } from '../db/catalog';
 import { TableLoader } from '../db/loader';
 import { HealthSchemaTool } from './health-schema';
+import { writeCsv, formatTimestamp, daysAgo } from '../test-helpers/csv-fixtures';
 
 const RECENT_HEART_RATE_ROWS = 120;
 const OLD_HEART_RATE_ROWS = 5;
 const TOTAL_HEART_RATE_ROWS = RECENT_HEART_RATE_ROWS + OLD_HEART_RATE_ROWS;
 
-function formatTimestamp(date: Date): string {
-  return `${date.toISOString().slice(0, 19).replace('T', ' ')} +0000`;
-}
-
-function daysAgo(days: number): Date {
-  const date = new Date();
-  date.setDate(date.getDate() - days);
-  return date;
-}
-
 // A fixed historical date proves the loader cannot depend on the wall clock.
 const OLD_EXPORT_DATE = new Date('2019-04-08T07:15:00Z');
-
-function writeCsv(dir: string, fileName: string, header: string, rows: string[]): void {
-  const lines = ['sep=,', header, ...rows];
-  writeFileSync(join(dir, fileName), lines.join('\r\n') + '\r\n');
-}
 
 let dataDir: string;
 let db: HealthDataDB;

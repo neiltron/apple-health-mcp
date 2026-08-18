@@ -3,26 +3,13 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FileCatalog } from './catalog';
-
-function formatTimestamp(date: Date): string {
-  return `${date.toISOString().slice(0, 19).replace('T', ' ')} +0000`;
-}
-
-function daysAgo(days: number): Date {
-  const date = new Date();
-  date.setDate(date.getDate() - days);
-  return date;
-}
-
-function writeCsv(dir: string, fileName: string, header: string, rows: string[]): void {
-  const lines = ['sep=,', header, ...rows];
-  writeFileSync(join(dir, fileName), lines.join('\r\n') + '\r\n');
-}
-
-const QUANTITY_HEADER =
-  'type,sourceName,sourceVersion,productType,device,startDate,endDate,unit,value';
-const WORKOUT_HEADER =
-  'type,sourceName,sourceVersion,startDate,endDate,duration,totalEnergyBurned,totalDistance';
+import {
+  writeCsv,
+  formatTimestamp,
+  daysAgo,
+  QUANTITY_HEADER,
+  WORKOUT_HEADER
+} from '../test-helpers/csv-fixtures';
 
 function quantityRow(): string {
   const start = formatTimestamp(daysAgo(1));
