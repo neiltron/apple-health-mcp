@@ -1,15 +1,41 @@
-import { readdir } from 'node:fs/promises';
-import { join } from 'node:path';
 import type { CatalogEntry } from '../types';
+import type { ImporterRegistry } from '../importers/registry';
+import { MultipleFormatsError } from '../importers/registry';
+
+// Recorded when a scan finds more than one export format in the data
+// directory. Retained so tools can show the actionable message instead of the
+// generic empty-catalog hint; cleared by the next successful scan.
+export interface ScanConflict {
+  formats: string[];
+  message: string;
+}
+
+// Serialization for the health://tables resource. Catalog entries also hold
+// local file paths and importer references, which stay out of protocol
+// responses; only these fields ever leave the process.
+export function projectTableInfo(
+  info: Record<string, CatalogEntry>
+): Array<{ name: string; loaded: boolean; rowCount: number | null }> {
+  return Object.entries(info)
+    .map(([name, entry]) => ({
+      name,
+      loaded: entry.loaded,
+      rowCount: entry.rowCount
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
 
 export class FileCatalog {
   private catalog: Map<string, CatalogEntry> = new Map();
   private dataDir: string;
-  
-  constructor(dataDir: string) {
+  private registry: ImporterRegistry;
+  private scanConflict: ScanConflict | null = null;
+
+  constructor(dataDir: string, registry: ImporterRegistry) {
     this.dataDir = dataDir;
+    this.registry = registry;
   }
-  
+
   async initialize(): Promise<void> {
     await this.scanDirectory();
   }
@@ -19,52 +45,55 @@ export class FileCatalog {
     await this.scanDirectory();
   }
 
+  getScanConflict(): ScanConflict | null {
+    return this.scanConflict;
+  }
+
   private async scanDirectory(): Promise<void> {
+    // Detection completes before the catalog mutates, so a failed or
+    // conflicting scan leaves the existing catalog untouched.
+    let tables;
     try {
-      const files = await readdir(this.dataDir);
-
-      for (const file of files) {
-        // Workout exports are named HKWorkoutActivityType.csv or
-        // HKWorkoutActivityTypeRunning.csv, with no literal "TypeIdentifier".
-        // The name capture stops at the first non-alphanumeric character, so a
-        // file like HKQuantityTypeIdentifierHeartRate_2026-07-21.csv still maps
-        // to the plain hkquantitytypeidentifierheartrate table name.
-        const match = file.match(/^(HK\w+?TypeIdentifier[A-Za-z0-9]+).*\.csv$/)
-          || file.match(/^(HKWorkoutActivityType[A-Za-z0-9]*).*\.csv$/);
-        if (match) {
-          const tableName = match[1].toLowerCase();
-          const path = join(this.dataDir, file);
-          const existing = this.catalog.get(tableName);
-
-          // Keep loaded state for tables we have already seen at this path.
-          if (existing && existing.path === path) {
-            continue;
-          }
-
-          this.catalog.set(tableName, {
-            path,
-            loaded: false,
-            rowCount: null
-          });
-        }
-      }
-      
-      // console.log(`Found ${this.catalog.size} health data CSV files`);
+      tables = await this.registry.detectAll(this.dataDir);
     } catch (error) {
-      // console.error(`Error scanning directory ${this.dataDir}:`, error);
+      if (error instanceof MultipleFormatsError) {
+        this.scanConflict = { formats: error.formats, message: error.message };
+        throw error;
+      }
       throw new Error(`Failed to catalog health data files: ${error}`);
     }
+
+    this.scanConflict = null;
+
+    for (const table of tables) {
+      const existing = this.catalog.get(table.tableName);
+
+      // Keep loaded state for tables we have already seen at this path.
+      if (existing && existing.path === table.path) {
+        continue;
+      }
+
+      this.catalog.set(table.tableName, {
+        path: table.path,
+        loaded: false,
+        rowCount: null,
+        kind: table.kind,
+        importer: table.importer
+      });
+    }
+    // Entries whose files have disappeared are deliberately retained: loaded
+    // tables stay queryable until evicted.
   }
-  
+
   getTablePath(tableName: string): string | undefined {
     const entry = this.catalog.get(tableName.toLowerCase());
     return entry?.path;
   }
-  
+
   getEntry(tableName: string): CatalogEntry | undefined {
     return this.catalog.get(tableName.toLowerCase());
   }
-  
+
   markLoaded(tableName: string, rowCount: number): void {
     const entry = this.catalog.get(tableName.toLowerCase());
     if (entry) {
@@ -73,20 +102,20 @@ export class FileCatalog {
       entry.lastAccessed = new Date();
     }
   }
-  
+
   markUnloaded(tableName: string): void {
     const entry = this.catalog.get(tableName.toLowerCase());
     if (entry) {
       entry.loaded = false;
     }
   }
-  
+
   getLoadedTables(): string[] {
     return Array.from(this.catalog.entries())
       .filter(([_, entry]) => entry.loaded)
       .map(([name]) => name);
   }
-  
+
   getTablesByLastAccess(): string[] {
     return Array.from(this.catalog.entries())
       .filter(([_, entry]) => entry.loaded)
@@ -97,11 +126,11 @@ export class FileCatalog {
       })
       .map(([name]) => name);
   }
-  
+
   getAllTables(): string[] {
     return Array.from(this.catalog.keys());
   }
-  
+
   getTableInfo(): Record<string, CatalogEntry> {
     const info: Record<string, CatalogEntry> = {};
     for (const [name, entry] of this.catalog) {

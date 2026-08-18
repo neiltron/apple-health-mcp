@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { HealthDataDB } from '../db/database';
 import { FileCatalog } from '../db/catalog';
+import { defaultRegistry } from '../importers';
 import { TableLoader } from '../db/loader';
 import { HealthSchemaTool } from './health-schema';
 import { writeCsv, formatTimestamp, daysAgo } from '../test-helpers/csv-fixtures';
@@ -68,7 +69,7 @@ beforeAll(async () => {
 
   db = new HealthDataDB({ dataDir, maxMemoryMB: 512 });
   await db.initialize();
-  catalog = new FileCatalog(dataDir);
+  catalog = new FileCatalog(dataDir, defaultRegistry());
   await catalog.initialize();
   loader = new TableLoader(db, catalog);
 
@@ -162,7 +163,7 @@ describe('HealthSchemaTool with an old-only export', () => {
 
     oldDb = new HealthDataDB({ dataDir: oldDir, maxMemoryMB: 512 });
     await oldDb.initialize();
-    const oldCatalog = new FileCatalog(oldDir);
+    const oldCatalog = new FileCatalog(oldDir, defaultRegistry());
     await oldCatalog.initialize();
     const oldLoader = new TableLoader(oldDb, oldCatalog);
 
@@ -201,7 +202,7 @@ describe('HealthSchemaTool with an unreadable export', () => {
 
     emptyDb = new HealthDataDB({ dataDir: emptyDir, maxMemoryMB: 512 });
     await emptyDb.initialize();
-    const emptyCatalog = new FileCatalog(emptyDir);
+    const emptyCatalog = new FileCatalog(emptyDir, defaultRegistry());
     await emptyCatalog.initialize();
     const emptyLoader = new TableLoader(emptyDb, emptyCatalog);
 

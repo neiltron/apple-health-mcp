@@ -5,6 +5,8 @@ export interface ClaimedTable extends DetectedTable {
 }
 
 export class MultipleFormatsError extends Error {
+  readonly formats: string[];
+
   constructor(displayNames: string[]) {
     super(
       `Multiple export formats found in the data directory: ${displayNames.join(', ')}. ` +
@@ -12,6 +14,7 @@ export class MultipleFormatsError extends Error {
         `and point HEALTH_DATA_DIR at one of them.`
     );
     this.name = 'MultipleFormatsError';
+    this.formats = displayNames;
   }
 }
 

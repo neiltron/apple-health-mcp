@@ -14,8 +14,9 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 
 import { HealthDataDB } from "./db/database.js";
-import { FileCatalog } from "./db/catalog.js";
+import { FileCatalog, projectTableInfo } from "./db/catalog.js";
 import { TableLoader } from "./db/loader.js";
+import { defaultRegistry } from "./importers/index.js";
 import { QueryCache } from "./core/cache.js";
 import { MemoryManager } from "./core/memory.js";
 import { HealthQueryTool } from "./tools/health-query.js";
@@ -43,7 +44,7 @@ if (!DATA_DIR) {
 
 // Initialize components
 const db = new HealthDataDB({ dataDir: DATA_DIR, maxMemoryMB: MAX_MEMORY_MB });
-const catalog = new FileCatalog(DATA_DIR);
+const catalog = new FileCatalog(DATA_DIR, defaultRegistry());
 const loader = new TableLoader(db, catalog);
 const cache = new QueryCache(CACHE_SIZE);
 const memoryManager = new MemoryManager(db, catalog, loader, MAX_MEMORY_MB);
@@ -191,15 +192,9 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
       } catch {
         // keep the existing catalog
       }
-      // Report table names only; catalog entries also hold local file paths,
-      // which stay out of protocol responses.
-      const tables = Object.entries(catalog.getTableInfo())
-        .map(([name, entry]) => ({
-          name,
-          loaded: entry.loaded,
-          rowCount: entry.rowCount
-        }))
-        .sort((a, b) => a.name.localeCompare(b.name));
+      // Report table names only; catalog entries also hold local file paths
+      // and importer references, which stay out of protocol responses.
+      const tables = projectTableInfo(catalog.getTableInfo());
       return {
         contents: [{
           uri,

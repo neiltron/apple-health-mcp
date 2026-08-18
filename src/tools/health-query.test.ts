@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { HealthDataDB } from '../db/database';
 import { FileCatalog } from '../db/catalog';
+import { defaultRegistry } from '../importers';
 import { TableLoader } from '../db/loader';
 import { QueryCache } from '../core/cache';
 import { HealthQueryTool } from './health-query';
@@ -26,7 +27,7 @@ beforeAll(async () => {
 
   db = new HealthDataDB({ dataDir, maxMemoryMB: 512 });
   await db.initialize();
-  const catalog = new FileCatalog(dataDir);
+  const catalog = new FileCatalog(dataDir, defaultRegistry());
   await catalog.initialize();
   const loader = new TableLoader(db, catalog);
   tool = new HealthQueryTool(db, new QueryCache(10), loader);

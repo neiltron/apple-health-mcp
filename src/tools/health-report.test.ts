@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { HealthDataDB } from '../db/database';
 import { FileCatalog } from '../db/catalog';
+import { defaultRegistry } from '../importers';
 import { TableLoader } from '../db/loader';
 import { QueryCache } from '../core/cache';
 import { HealthReportTool } from './health-report';
@@ -121,7 +122,7 @@ beforeAll(async () => {
   // Cold server: nothing loaded before the report runs.
   db = new HealthDataDB({ dataDir, maxMemoryMB: 512 });
   await db.initialize();
-  const catalog = new FileCatalog(dataDir);
+  const catalog = new FileCatalog(dataDir, defaultRegistry());
   await catalog.initialize();
   const loader = new TableLoader(db, catalog);
   const cache = new QueryCache(100);
@@ -212,7 +213,7 @@ describe('HealthReportTool over a historical period', () => {
 
     const oldDb = new HealthDataDB({ dataDir: oldDir, maxMemoryMB: 512 });
     await oldDb.initialize();
-    const catalog = new FileCatalog(oldDir);
+    const catalog = new FileCatalog(oldDir, defaultRegistry());
     await catalog.initialize();
     const loader = new TableLoader(oldDb, catalog);
     const reportTool = new HealthReportTool(oldDb, new QueryCache(100), catalog, loader);
@@ -240,7 +241,7 @@ describe('HealthReportTool when a table cannot load', () => {
 
     const brokenDb = new HealthDataDB({ dataDir: brokenDir, maxMemoryMB: 512 });
     await brokenDb.initialize();
-    const catalog = new FileCatalog(brokenDir);
+    const catalog = new FileCatalog(brokenDir, defaultRegistry());
     await catalog.initialize();
 
     // Point the catalog entry at a file that does not exist so the load throws.
@@ -266,7 +267,7 @@ describe('HealthReportTool with a missing metric', () => {
 
     const emptyDb = new HealthDataDB({ dataDir: emptyDir, maxMemoryMB: 512 });
     await emptyDb.initialize();
-    const catalog = new FileCatalog(emptyDir);
+    const catalog = new FileCatalog(emptyDir, defaultRegistry());
     await catalog.initialize();
     const loader = new TableLoader(emptyDb, catalog);
     const reportTool = new HealthReportTool(emptyDb, new QueryCache(100), catalog, loader);

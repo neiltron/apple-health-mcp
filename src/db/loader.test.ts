@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { HealthDataDB } from './database';
 import { FileCatalog } from './catalog';
+import { defaultRegistry } from '../importers';
 import { TableLoader } from './loader';
 import {
   writeCsv,
@@ -195,7 +196,7 @@ beforeAll(async () => {
 
   db = new HealthDataDB({ dataDir, maxMemoryMB: 512 });
   await db.initialize();
-  catalog = new FileCatalog(dataDir);
+  catalog = new FileCatalog(dataDir, defaultRegistry());
   await catalog.initialize();
   loader = new TableLoader(db, catalog);
 });
@@ -454,7 +455,7 @@ describe('TableLoader path handling', () => {
 
     const quotedDb = new HealthDataDB({ dataDir: quotedDir, maxMemoryMB: 512 });
     await quotedDb.initialize();
-    const quotedCatalog = new FileCatalog(quotedDir);
+    const quotedCatalog = new FileCatalog(quotedDir, defaultRegistry());
     await quotedCatalog.initialize();
     const quotedLoader = new TableLoader(quotedDb, quotedCatalog);
 
@@ -511,7 +512,7 @@ describe('TableLoader load mechanics', () => {
   beforeAll(async () => {
     spyDb = new HealthDataDB({ dataDir, maxMemoryMB: 512 });
     await spyDb.initialize();
-    spyCatalog = new FileCatalog(dataDir);
+    spyCatalog = new FileCatalog(dataDir, defaultRegistry());
     await spyCatalog.initialize();
     spyLoader = new TableLoader(spyDb, spyCatalog);
 
