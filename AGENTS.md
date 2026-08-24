@@ -28,6 +28,11 @@ Tests use Bun. The published runtime requires Node.js 22 or newer.
   `health_report`
 - `src/core/`: query caching, lazy-load coordination, and memory management
 - `server.json`: MCP Registry metadata
+- `docs/solutions/`: documented solutions and decisions from past work (bugs,
+  tooling choices, patterns), organized by category with YAML frontmatter
+  (`module`, `tags`, `problem_type`) — relevant when working in documented areas
+- `CONCEPTS.md`: shared domain vocabulary (entities, named processes, status
+  concepts) — relevant when orienting to the codebase or discussing domain terms
 
 See `docs/architecture.md` for the runtime flow and `docs/querying.md` for the
 normalized data model.

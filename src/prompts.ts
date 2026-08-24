@@ -15,7 +15,7 @@ export interface PromptDefinition {
   }>;
 }
 
-export interface PromptMessages extends GetPromptResult {
+interface PromptMessages extends GetPromptResult {
   description: string;
   messages: Array<{
     role: "user";

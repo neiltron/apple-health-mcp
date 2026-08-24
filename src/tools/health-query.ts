@@ -3,8 +3,12 @@ import type { QueryCache } from '../core/cache';
 import type { TableLoader } from '../db/loader';
 import type { HealthQueryArgs, QueryResult, OutputFormat } from '../types';
 
-function isFiniteNumber(value: any): value is number {
-  return Number.isFinite(value);
+function isNumber(value: any): value is number {
+  return Object(value) instanceof Number && Object(value) !== value;
+}
+
+function isString(value: any): value is string {
+  return Object(value) instanceof String && Object(value) !== value;
 }
 
 export class HealthQueryTool {
@@ -96,7 +100,7 @@ export class HealthQueryTool {
     for (const row of result.rows) {
       lines.push(row.map(val => {
         const text = String(val ?? '');
-        return text.includes(',') ? `"${text}"` : text;
+        return isString(val) && val.includes(',') ? `"${text}"` : text;
       }).join(','));
     }
     
@@ -115,7 +119,7 @@ export class HealthQueryTool {
       
       // Add basic statistics for numeric columns
       const numericColumns = result.columns.filter((col, idx) =>
-        result.rows.some(row => isFiniteNumber(row[idx]))
+        result.rows.some(row => isNumber(row[idx]))
       );
       
       if (numericColumns.length > 0) {
@@ -125,7 +129,7 @@ export class HealthQueryTool {
           const colIdx = result.columns.indexOf(col);
           const values = result.rows
             .map(row => row[colIdx])
-            .filter(isFiniteNumber);
+            .filter(isNumber);
           
           if (values.length > 0) {
             summary.statistics[col] = {

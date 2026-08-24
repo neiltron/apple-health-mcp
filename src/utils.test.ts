@@ -11,4 +11,10 @@ describe('jsonReplacer', () => {
 
     expect(jsonReplacer('value', tagged)).toBe(tagged);
   });
+
+  test('preserves boxed bigint values', () => {
+    const boxed = Object(12n);
+
+    expect(jsonReplacer('value', boxed)).toBe(boxed);
+  });
 });

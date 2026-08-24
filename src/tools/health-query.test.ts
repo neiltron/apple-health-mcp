@@ -56,6 +56,36 @@ describe('HealthQueryTool accepted queries', () => {
   });
 });
 
+describe('HealthQueryTool output formats', () => {
+  test('preserves existing CSV serialization for strings and composites', async () => {
+    const result = await tool.execute({
+      query: "SELECT 'a,b' AS label, [1, 2] AS values",
+      format: 'csv'
+    });
+
+    expect(result).toBe('label,values\\n"a,b",1,2');
+  });
+
+  test('includes non-finite numbers in summary statistics', async () => {
+    const result = await tool.execute({
+      query:
+        "SELECT CAST('NaN' AS DOUBLE) AS nan, CAST('Infinity' AS DOUBLE) AS infinity",
+      format: 'summary'
+    });
+
+    expect(Number.isNaN(result.statistics.nan.min)).toBe(true);
+    expect(Number.isNaN(result.statistics.nan.max)).toBe(true);
+    expect(Number.isNaN(result.statistics.nan.avg)).toBe(true);
+    expect(result.statistics.nan.count).toBe(1);
+    expect(result.statistics.infinity).toEqual({
+      min: Infinity,
+      max: Infinity,
+      avg: Infinity,
+      count: 1
+    });
+  });
+});
+
 describe('HealthQueryTool rejected queries', () => {
   const rejected: Array<[string, string]> = [
     ["SET max_temp_directory_size = '10GB'", 'set'],

@@ -2,7 +2,7 @@ import type { HealthDataDB } from '../db/database';
 import type { FileCatalog } from '../db/catalog';
 import type { TableLoader } from '../db/loader';
 
-export interface MemoryStats {
+interface MemoryStats {
   maxMemoryMB: number;
   estimatedUsageMB: number;
   loadedTables: number;
