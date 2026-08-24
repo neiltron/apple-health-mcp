@@ -25,15 +25,32 @@ export class HealthSchemaTool {
     // Get available tables from catalog
     const tableInfo = this.catalog.getTableInfo();
     const availableTables = Object.keys(tableInfo);
-    
+    const scanConflict = this.catalog.getScanConflict();
+
     if (availableTables.length === 0) {
+      // A multi-format directory looks exactly like an empty one from here;
+      // the generic hint would be actively misleading, so surface the
+      // conflict's actionable message instead.
+      if (scanConflict) {
+        return {
+          error: `Multiple export formats found: ${scanConflict.formats.join(', ')}`,
+          suggestion: scanConflict.message
+        };
+      }
       return {
         error: "No health data tables found",
         suggestion: "Check that HEALTH_DATA_DIR contains CSV files"
       };
     }
-    
-    // Load a sample from key tables to show structure (including workouts/distance for unit hints)
+
+    // Workout classification comes from catalog kind metadata, the same
+    // source health_report uses.
+    const workoutTables = new Set(this.catalog.getTablesByKind('workout'));
+
+    // Load a sample from key tables to show structure (including workouts/distance
+    // for unit hints). Sampling keeps the name heuristic alongside the kind so
+    // workout-adjacent quantity tables (e.g. WorkoutEffortScore) still get
+    // their details and unit hints shown; classification below stays kind-only.
     const sampleTables = availableTables
       .filter(name =>
         name.includes('heartrate') ||
@@ -42,7 +59,8 @@ export class HealthSchemaTool {
         name.includes('activeenergyburned') ||
         name.includes('distancewalkingrunning') ||
         name.includes('distancecycling') ||
-        name.includes('workout')
+        name.includes('workout') ||
+        workoutTables.has(name)
       )
       .slice(0, 8);
     
@@ -142,9 +160,15 @@ export class HealthSchemaTool {
       heartRate: availableTables.filter(t => t.includes('heartrate')),
       activity: availableTables.filter(t => t.includes('stepcount') || t.includes('distance') || t.includes('calories')),
       sleep: availableTables.filter(t => t.includes('sleep')),
-      workouts: availableTables.filter(t => t.includes('workout')),
+      workouts: availableTables.filter(t => workoutTables.has(t)),
       vitals: availableTables.filter(t => t.includes('bloodpressure') || t.includes('temperature') || t.includes('oxygen'))
     };
+
+    // A conflict recorded over a previously valid catalog: the tables below
+    // are still queryable, but new files are not being picked up.
+    if (scanConflict) {
+      schema.scanWarning = scanConflict.message;
+    }
     
     // Add query tips
     schema.queryTips = [
