@@ -199,4 +199,39 @@ describe('HealthQueryTool rejected queries', () => {
       expect(error!.message).not.toContain(REJECTION);
     });
   }
+
+  test('rejects lowercase and comment-obfuscated forms (parser, not substring)', async () => {
+    await expect(tool.execute({ query: "copy (select 1) to 'x'" })).rejects.toThrow(REJECTION);
+    await expect(
+      tool.execute({ query: 'SELECT 1 -- inline\n; DROP TABLE hkquantitytypeidentifierheartrate' })
+    ).rejects.toThrow(REJECTION);
+  });
+
+  test('accepts a comment inside a single SELECT', async () => {
+    const result = await tool.execute({
+      query: 'SELECT /* leading comment */ COUNT(*) FROM hkquantitytypeidentifierheartrate'
+    });
+    expect(result.rowCount).toBe(1);
+  });
+
+  test('a rejected query never reaches the database', async () => {
+    const executed: string[] = [];
+    const originalExecute = db.execute.bind(db);
+    // SAFETY: the spy has the same (query, sessionId?) => Promise<any[]>
+    // signature as HealthDataDB.execute, so it is a drop-in replacement.
+    db.execute = ((query: string, sessionId?: string) => {
+      // Ignore the validator's own json_serialize_sql probe; record real runs.
+      if (!query.includes('json_serialize_sql')) executed.push(query);
+      return originalExecute(query, sessionId);
+    }) as typeof db.execute;
+
+    try {
+      await expect(
+        tool.execute({ query: "COPY (SELECT 1) TO 'leak.csv'" })
+      ).rejects.toThrow(REJECTION);
+      expect(executed).toEqual([]);
+    } finally {
+      db.execute = originalExecute;
+    }
+  });
 });

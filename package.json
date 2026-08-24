@@ -1,6 +1,6 @@
 {
   "name": "@neiltron/apple-health-mcp",
-  "version": "1.4.2",
+  "version": "1.4.3",
   "mcpName": "io.github.neiltron/apple-health-mcp",
   "description": "Local-first Apple Health MCP server. Lets AI assistants answer questions about your sleep, workouts, activity and heart data from a local export.",
   "main": "dist/server.js",

@@ -72,11 +72,38 @@ The conformance suite in `src/test-helpers/conformance.ts` asserts this
 contract end-to-end for every importer; a new format adopts it by supplying
 fixtures.
 
-### Query safety and caching
+### Query boundary
 
-`health_query` requires a statement containing `SELECT` and rejects a small
-blocklist of mutation keywords. This is a pragmatic guard, not a complete SQL
-parser or security boundary.
+`health_query` is confined by two independent layers.
+
+The engine sandbox is the enforcement of record. At startup `setupDatabase`
+sets `allowed_directories` to `HEALTH_DATA_DIR`, then `enable_external_access =
+false`, then `lock_configuration = true`. File access is therefore limited to
+the data directory — the loader's `read_csv` on catalog files keeps working,
+while `read_text('/etc/hosts')`, out-of-directory `COPY`, `ATTACH`, and
+extension installation fail at execution — and no later query can loosen any of
+these settings, including re-enabling disk spill. This holds even when a query
+hides a file read inside a macro or a form the tool never parses: the engine
+stops the access at runtime regardless.
+
+The validator adds the one thing the engine leaves open. Since the data
+directory is writable, `COPY (SELECT ...) TO` a file *inside* it would succeed
+at the engine. `health_query` rejects it by asking DuckDB's own parser
+(`json_serialize_sql`) whether the input is exactly one read-only `SELECT`
+statement; anything else — non-`SELECT` forms, multiple statements — is
+rejected before execution. Because the parser decides statement kind and count,
+a query of any internal complexity (joins, CTEs, nested subqueries, `UNION`) is
+accepted, and a string literal or column name containing a word like `drop` or
+`reset` is no longer a false positive.
+
+These settings are defense-in-depth for a local single-user stdio server, not
+OS-level process sandboxing; DuckDB's own guidance is explicit that engine
+settings are not a substitute for sandboxing untrusted SQL at the process
+level. One known limitation: `allowed_directories` does not canonicalize paths,
+so a symlink placed *inside* the data directory pointing outside it can be
+read. Reaching this requires an attacker who can write a symlink into the data
+directory, which is outside the query-sending threat model this boundary
+targets.
 
 Query results use an in-memory bounded cache. Aggregate queries receive a
 ten-minute TTL. For non-aggregate queries, requests involving `CURRENT_DATE` or
@@ -128,6 +155,7 @@ MCP client and are subject to that client's data handling.
 - One export format per data directory.
 - The database is in memory and is rebuilt per process; incremental or
   persistent import is planned future work.
-- Query validation and lazy-load table detection are string-based.
+- Query validation uses DuckDB's parser (single read-only `SELECT`); lazy-load
+  table detection is still string-based.
 - The implementation exposes tools only—no resources, prompts, HTTP transport,
   or hosted service.
