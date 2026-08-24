@@ -81,8 +81,11 @@ sets `allowed_directories` to `HEALTH_DATA_DIR`, then `enable_external_access =
 false`, then `lock_configuration = true`. File access is therefore limited to
 the data directory — the loader's `read_csv` on catalog files keeps working,
 while `read_text('/etc/hosts')`, out-of-directory `COPY`, `ATTACH`, and
-extension installation fail at execution — and no later query can loosen any of
-these settings, including re-enabling disk spill. This holds even when a query
+extension *installation* (`INSTALL`, which needs external access) fail at
+execution — and no later query can loosen any of these settings, including
+re-enabling disk spill. Loading an already-bundled extension (`LOAD`) is not
+blocked at the engine; the validator layer stops it because `LOAD` is not a
+`SELECT`. This holds even when a query
 hides a file read inside a macro or a form the tool never parses: the engine
 stops the access at runtime regardless.
 

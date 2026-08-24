@@ -102,4 +102,39 @@ describe('HealthDataDB query boundary', () => {
   test('blocks installing an extension', async () => {
     await expect(boundaryDb.execute(`INSTALL httpfs`)).rejects.toThrow();
   });
+
+  // LOAD of an already-bundled extension is NOT blocked at the engine (only
+  // INSTALL needs external access). The validator layer stops it because LOAD
+  // is not a SELECT; this test pins the engine-layer behavior so the doc's
+  // narrower claim stays honest.
+  test('does not block LOAD of a bundled extension at the engine', async () => {
+    await expect(boundaryDb.execute(`LOAD icu`)).resolves.toBeDefined();
+  });
+});
+
+describe('HealthDataDB with a quote in the data directory', () => {
+  let quotedDir: string;
+  let quotedDb: HealthDataDB;
+
+  beforeAll(async () => {
+    // A directory name containing a single quote must not break out of the
+    // allowed_directories SQL literal or corrupt the surrounding SET batch.
+    quotedDir = mkdtempSync(join(tmpdir(), "health-o'brien-"));
+    writeFileSync(join(quotedDir, 'inside.csv'), 'a\n1\n');
+    quotedDb = new HealthDataDB({ dataDir: quotedDir, maxMemoryMB: MAX_MEMORY_MB });
+    await quotedDb.initialize();
+  });
+
+  afterAll(async () => {
+    await quotedDb.close();
+    rmSync(quotedDir, { recursive: true, force: true });
+  });
+
+  test('still confines file access and locks configuration', async () => {
+    const inside = join(quotedDir, 'inside.csv').replace(/'/g, "''");
+    const result = await quotedDb.execute(`SELECT COUNT(*) as count FROM read_csv('${inside}')`);
+    expect(Number(result[0].count)).toBe(1);
+    await expect(quotedDb.execute(`SELECT * FROM read_text('/etc/hosts')`)).rejects.toThrow();
+    await expect(quotedDb.execute(`SET memory_limit = '64MB'`)).rejects.toThrow();
+  });
 });

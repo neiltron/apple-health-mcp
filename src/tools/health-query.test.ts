@@ -234,4 +234,36 @@ describe('HealthQueryTool rejected queries', () => {
       db.execute = originalExecute;
     }
   });
+
+  test('an accepted query is validated before it executes', async () => {
+    const order: string[] = [];
+    const originalIsSingleSelect = db.isSingleSelect.bind(db);
+    const originalExecute = db.execute.bind(db);
+    // SAFETY: the spy keeps isSingleSelect's signature, so it is a drop-in
+    // replacement that only records call order before delegating.
+    db.isSingleSelect = ((query: string, sessionId?: string) => {
+      order.push('validate');
+      return originalIsSingleSelect(query, sessionId);
+    }) as typeof db.isSingleSelect;
+    // SAFETY: the spy keeps execute's signature, so it is a drop-in
+    // replacement that only records call order before delegating.
+    db.execute = ((query: string, sessionId?: string) => {
+      if (!query.includes('json_serialize_sql')) order.push('execute');
+      return originalExecute(query, sessionId);
+    }) as typeof db.execute;
+
+    try {
+      await tool.execute({
+        query: 'SELECT COUNT(*) FROM hkquantitytypeidentifierheartrate'
+      });
+      // Validation must precede execution; a dropped await would reverse this
+      // or run them concurrently.
+      expect(order[0]).toBe('validate');
+      expect(order).toContain('execute');
+      expect(order.indexOf('validate')).toBeLessThan(order.indexOf('execute'));
+    } finally {
+      db.isSingleSelect = originalIsSingleSelect;
+      db.execute = originalExecute;
+    }
+  });
 });

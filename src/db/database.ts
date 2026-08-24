@@ -1,6 +1,7 @@
 import duckdb from 'duckdb';
 import type { Database, Connection } from 'duckdb';
 import type { HealthDataConfig } from '../types';
+import { escapeSqlLiteral } from '../utils';
 
 export class HealthDataDB {
   private db: Database;
@@ -27,12 +28,6 @@ export class HealthDataDB {
     await this.setupDatabase();
   }
   
-  // Directory names can contain a single quote ("Neil's Health"); escape it so
-  // the path stays inside its SQL literal, the same way the CSV loader does.
-  private sqlLiteral(value: string): string {
-    return value.replace(/'/g, "''");
-  }
-
   private async setupDatabase(): Promise<void> {
     return new Promise((resolve, reject) => {
       // Security boundary (see docs/architecture.md "Query boundary"):
@@ -44,7 +39,7 @@ export class HealthDataDB {
       //
       // Zero temporary capacity keeps health rows in memory. A load that does
       // not fit fails loudly instead of spilling personal data to disk.
-      const dataDir = this.sqlLiteral(this.config.dataDir);
+      const dataDir = escapeSqlLiteral(this.config.dataDir);
       this.db.run(`
         SET memory_limit = '${this.config.maxMemoryMB}MB';
         SET threads = 4;
