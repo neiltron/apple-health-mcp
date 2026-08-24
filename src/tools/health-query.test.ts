@@ -57,13 +57,22 @@ describe('HealthQueryTool accepted queries', () => {
 });
 
 describe('HealthQueryTool output formats', () => {
-  test('preserves existing CSV serialization for strings and composites', async () => {
+  test('separates CSV rows with real newlines and quotes composite values', async () => {
     const result = await tool.execute({
       query: "SELECT 'a,b' AS label, [1, 2] AS values",
       format: 'csv'
     });
 
-    expect(result).toBe('label,values\\n"a,b",1,2');
+    expect(result).toBe('label,values\n"a,b","1,2"');
+  });
+
+  test('doubles embedded quotes and quotes fields containing line breaks', async () => {
+    const result = await tool.execute({
+      query: `SELECT 'say "hi"' AS quoted, 'line1' || chr(10) || 'line2' AS multiline`,
+      format: 'csv'
+    });
+
+    expect(result).toBe('quoted,multiline\n"say ""hi""","line1\nline2"');
   });
 
   test('includes non-finite numbers in summary statistics', async () => {

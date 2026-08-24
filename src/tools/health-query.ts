@@ -7,8 +7,12 @@ function isNumber(value: any): value is number {
   return Object(value) instanceof Number && Object(value) !== value;
 }
 
-function isString(value: any): value is string {
-  return Object(value) instanceof String && Object(value) !== value;
+// RFC 4180: a field whose text contains a comma, quote, or line break must
+// be quoted, with embedded quotes doubled. Quoting keys off the rendered
+// text, so composite values such as DuckDB lists stay a single field.
+function escapeCsvField(value: any): string {
+  const text = String(value ?? '');
+  return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
 export class HealthQueryTool {
@@ -92,19 +96,16 @@ export class HealthQueryTool {
   
   private formatAsCSV(result: QueryResult): string {
     const lines: string[] = [];
-    
+
     // Header
-    lines.push(result.columns.join(','));
-    
+    lines.push(result.columns.map(escapeCsvField).join(','));
+
     // Rows
     for (const row of result.rows) {
-      lines.push(row.map(val => {
-        const text = String(val ?? '');
-        return isString(val) && val.includes(',') ? `"${text}"` : text;
-      }).join(','));
+      lines.push(row.map(escapeCsvField).join(','));
     }
-    
-    return lines.join('\\n');
+
+    return lines.join('\n');
   }
   
   private formatAsSummary(result: QueryResult): any {
