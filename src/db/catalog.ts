@@ -11,7 +11,7 @@ export interface ScanConflict {
   message: string;
 }
 
-export interface CatalogTableInfo {
+interface CatalogTableInfo {
   [tableName: string]: CatalogEntry;
 }
 

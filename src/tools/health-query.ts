@@ -3,8 +3,16 @@ import type { QueryCache } from '../core/cache';
 import type { TableLoader } from '../db/loader';
 import type { HealthQueryArgs, QueryResult, OutputFormat } from '../types';
 
-function isFiniteNumber(value: any): value is number {
-  return Number.isFinite(value);
+function isNumber(value: any): value is number {
+  return Object(value) instanceof Number && Object(value) !== value;
+}
+
+// RFC 4180: a field whose text contains a comma, quote, or line break must
+// be quoted, with embedded quotes doubled. Quoting keys off the rendered
+// text, so composite values such as DuckDB lists stay a single field.
+function escapeCsvField(value: any): string {
+  const text = String(value ?? '');
+  return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
 export class HealthQueryTool {
@@ -88,19 +96,16 @@ export class HealthQueryTool {
   
   private formatAsCSV(result: QueryResult): string {
     const lines: string[] = [];
-    
+
     // Header
-    lines.push(result.columns.join(','));
-    
+    lines.push(result.columns.map(escapeCsvField).join(','));
+
     // Rows
     for (const row of result.rows) {
-      lines.push(row.map(val => {
-        const text = String(val ?? '');
-        return text.includes(',') ? `"${text}"` : text;
-      }).join(','));
+      lines.push(row.map(escapeCsvField).join(','));
     }
-    
-    return lines.join('\\n');
+
+    return lines.join('\n');
   }
   
   private formatAsSummary(result: QueryResult): any {
@@ -115,7 +120,7 @@ export class HealthQueryTool {
       
       // Add basic statistics for numeric columns
       const numericColumns = result.columns.filter((col, idx) =>
-        result.rows.some(row => isFiniteNumber(row[idx]))
+        result.rows.some(row => isNumber(row[idx]))
       );
       
       if (numericColumns.length > 0) {
@@ -125,7 +130,7 @@ export class HealthQueryTool {
           const colIdx = result.columns.indexOf(col);
           const values = result.rows
             .map(row => row[colIdx])
-            .filter(isFiniteNumber);
+            .filter(isNumber);
           
           if (values.length > 0) {
             summary.statistics[col] = {
