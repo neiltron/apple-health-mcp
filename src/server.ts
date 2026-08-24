@@ -317,8 +317,8 @@ async function main() {
       process.exit(0);
     });
     
-  } catch (error) {
-    // console.error('Failed to start server:', error);
+  } catch {
+    // console.error('Failed to start server');
     process.exit(1);
   }
 }

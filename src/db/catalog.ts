@@ -118,13 +118,13 @@ export class FileCatalog {
 
   getLoadedTables(): string[] {
     return Array.from(this.catalog.entries())
-      .filter(([_, entry]) => entry.loaded)
+      .filter(([, entry]) => entry.loaded)
       .map(([name]) => name);
   }
 
   getTablesByLastAccess(): string[] {
     return Array.from(this.catalog.entries())
-      .filter(([_, entry]) => entry.loaded)
+      .filter(([, entry]) => entry.loaded)
       .sort((a, b) => {
         const timeA = a[1].lastAccessed?.getTime() || 0;
         const timeB = b[1].lastAccessed?.getTime() || 0;
@@ -141,7 +141,7 @@ export class FileCatalog {
   // tools never pattern-match table names.
   getTablesByKind(kind: TableKind): string[] {
     return Array.from(this.catalog.entries())
-      .filter(([_, entry]) => entry.kind === kind)
+      .filter(([, entry]) => entry.kind === kind)
       .map(([name]) => name);
   }
 

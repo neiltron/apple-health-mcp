@@ -57,7 +57,7 @@ export class TableLoader {
     for (const table of tables) {
       try {
         await this.ensureTableLoaded(table);
-      } catch (error) {
+      } catch {
         // A single unreadable file must not stop the rest of the export.
       }
     }
@@ -67,7 +67,7 @@ export class TableLoader {
     try {
       await this.db.run(`DROP TABLE IF EXISTS ${tableName}`);
       this.catalog.markUnloaded(tableName);
-    } catch (error) {
+    } catch {
       // Eviction is best-effort; a failed drop leaves the table queryable.
     }
   }

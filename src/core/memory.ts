@@ -47,8 +47,8 @@ export class MemoryManager {
         // console.log(`Memory pressure detected: ${memoryUsage}MB / ${this.maxMemoryMB}MB`);
         await this.evictLRUTables();
       }
-    } catch (error) {
-      // console.error('Error checking memory pressure:', error);
+    } catch {
+      // Memory-pressure checks are best-effort; the next interval retries.
     }
   }
   

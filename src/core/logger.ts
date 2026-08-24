@@ -14,7 +14,7 @@ export class Logger {
     } else {
       try {
         appendFileSync(this.logFile, message);
-      } catch (error) {
+      } catch {
         // Fail silently - we can't log errors about logging
       }
     }
@@ -29,7 +29,7 @@ export class Logger {
     } else {
       try {
         appendFileSync(this.logFile, message);
-      } catch (error) {
+      } catch {
         // Fail silently
       }
     }
