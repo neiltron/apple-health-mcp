@@ -2,6 +2,13 @@ import type { HealthDataDB } from '../db/database';
 import type { FileCatalog } from '../db/catalog';
 import type { TableLoader } from '../db/loader';
 
+export interface MemoryStats {
+  maxMemoryMB: number;
+  estimatedUsageMB: number;
+  loadedTables: number;
+  totalTables: number;
+}
+
 export class MemoryManager {
   private db: HealthDataDB;
   private catalog: FileCatalog;
@@ -47,8 +54,8 @@ export class MemoryManager {
         // console.log(`Memory pressure detected: ${memoryUsage}MB / ${this.maxMemoryMB}MB`);
         await this.evictLRUTables();
       }
-    } catch (error) {
-      // console.error('Error checking memory pressure:', error);
+    } catch {
+      // Memory-pressure checks are best-effort; the next interval retries.
     }
   }
   
@@ -90,12 +97,7 @@ export class MemoryManager {
     }
   }
   
-  getMemoryStats(): {
-    maxMemoryMB: number;
-    estimatedUsageMB: number;
-    loadedTables: number;
-    totalTables: number;
-  } {
+  getMemoryStats(): MemoryStats {
     const loadedTables = this.catalog.getLoadedTables();
     const allTables = this.catalog.getAllTables();
     

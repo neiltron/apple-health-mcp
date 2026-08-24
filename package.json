@@ -17,6 +17,7 @@
     "build:tsc": "tsc",
     "start": "node dist/server.js",
     "dev": "bun --watch src/server.ts",
+    "lint": "oxlint",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
     "prepublishOnly": "npm run build"
@@ -51,8 +52,10 @@
     "duckdb": "^1.4.4"
   },
   "devDependencies": {
+    "@oxlint/plugins": "1.79.0",
     "@types/bun": "latest",
     "@types/node": "^22.10.5",
+    "oxlint": "1.79.0",
     "typescript": "^7.0.2"
   }
 }

@@ -2,6 +2,8 @@
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { AjvJsonSchemaValidator } from "@modelcontextprotocol/sdk/validation/ajv";
+import type { JsonSchemaType } from "@modelcontextprotocol/sdk/validation";
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
@@ -30,6 +32,55 @@ import type { HealthQueryArgs, HealthReportArgs } from "./types.js";
 const DATA_DIR = process.env.HEALTH_DATA_DIR || './HealthAll_2025-07-202_01-04-39_SimpleHealthExportCSV';
 const MAX_MEMORY_MB = parseInt(process.env.MAX_MEMORY_MB || '2048');
 const CACHE_SIZE = parseInt(process.env.CACHE_SIZE || '100');
+
+const healthQueryInputSchema = {
+  type: "object",
+  properties: {
+    query: {
+      type: "string",
+      description: "SQL SELECT query to execute"
+    },
+    format: {
+      type: "string",
+      enum: ["json", "csv", "summary"],
+      description: "Output format (default: json)"
+    }
+  },
+  required: ["query"]
+} satisfies JsonSchemaType;
+
+const healthReportInputSchema = {
+  type: "object",
+  properties: {
+    report_type: {
+      type: "string",
+      enum: ["weekly", "monthly", "custom"],
+      description: "Type of report to generate"
+    },
+    start_date: {
+      type: "string",
+      format: "date",
+      description: "Start date for custom reports (YYYY-MM-DD)"
+    },
+    end_date: {
+      type: "string",
+      format: "date",
+      description: "End date for custom reports (YYYY-MM-DD)"
+    },
+    include_metrics: {
+      type: "array",
+      items: { type: "string" },
+      description: "Metrics to include (default: all)"
+    }
+  },
+  required: ["report_type"]
+} satisfies JsonSchemaType;
+
+const argumentValidator = new AjvJsonSchemaValidator();
+const validateHealthQueryArgs =
+  argumentValidator.getValidator<HealthQueryArgs>(healthQueryInputSchema);
+const validateHealthReportArgs =
+  argumentValidator.getValidator<HealthReportArgs>(healthReportInputSchema);
 
 // Validate data directory
 if (!DATA_DIR) {
@@ -72,51 +123,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     {
       name: "health_query",
       description: "Execute SQL queries on Apple Health data. Supports SELECT queries only.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          query: { 
-            type: "string",
-            description: "SQL SELECT query to execute"
-          },
-          format: { 
-            type: "string", 
-            enum: ["json", "csv", "summary"],
-            description: "Output format (default: json)"
-          }
-        },
-        required: ["query"]
-      }
+      inputSchema: healthQueryInputSchema
     },
     {
       name: "health_report",
       description: "Generate structured health reports for a specific period",
-      inputSchema: {
-        type: "object",
-        properties: {
-          report_type: {
-            type: "string",
-            enum: ["weekly", "monthly", "custom"],
-            description: "Type of report to generate"
-          },
-          start_date: {
-            type: "string",
-            format: "date",
-            description: "Start date for custom reports (YYYY-MM-DD)"
-          },
-          end_date: {
-            type: "string",
-            format: "date",
-            description: "End date for custom reports (YYYY-MM-DD)"
-          },
-          include_metrics: {
-            type: "array",
-            items: { type: "string" },
-            description: "Metrics to include (default: all)"
-          }
-        },
-        required: ["report_type"]
-      }
+      inputSchema: healthReportInputSchema
     },
     {
       name: "health_schema",
@@ -140,7 +152,7 @@ server.setRequestHandler(GetPromptRequestSchema, async (request) => {
   try {
     return buildPromptMessages(
       request.params.name,
-      (request.params.arguments ?? {}) as Record<string, string | undefined>
+      request.params.arguments ?? {}
     );
   } catch (error) {
     throw new McpError(
@@ -207,7 +219,7 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
             {
               totalTables: tables.length,
               tables,
-              ...(conflict ? { scanWarning: conflict.message } : {})
+              scanWarning: conflict?.message
             },
             jsonReplacer,
             2
@@ -230,21 +242,31 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   
   try {
     switch (name) {
-      case "health_query":
+      case "health_query": {
+        const validated = validateHealthQueryArgs(args ?? {});
+        if (!validated.valid) {
+          throw new McpError(ErrorCode.InvalidParams, validated.errorMessage);
+        }
         return {
           content: [{
             type: "text",
-            text: JSON.stringify(await queryTool.execute(args as unknown as HealthQueryArgs), jsonReplacer, 2)
+            text: JSON.stringify(await queryTool.execute(validated.data), jsonReplacer, 2)
           }]
         };
+      }
         
-      case "health_report":
+      case "health_report": {
+        const validated = validateHealthReportArgs(args ?? {});
+        if (!validated.valid) {
+          throw new McpError(ErrorCode.InvalidParams, validated.errorMessage);
+        }
         return {
           content: [{
             type: "text",
-            text: JSON.stringify(await reportTool.execute(args as unknown as HealthReportArgs), jsonReplacer, 2)
+            text: JSON.stringify(await reportTool.execute(validated.data), jsonReplacer, 2)
           }]
         };
+      }
         
       case "health_schema":
         return {
@@ -317,8 +339,8 @@ async function main() {
       process.exit(0);
     });
     
-  } catch (error) {
-    // console.error('Failed to start server:', error);
+  } catch {
+    // console.error('Failed to start server');
     process.exit(1);
   }
 }
