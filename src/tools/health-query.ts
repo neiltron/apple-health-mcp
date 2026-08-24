@@ -3,6 +3,10 @@ import type { QueryCache } from '../core/cache';
 import type { TableLoader } from '../db/loader';
 import type { HealthQueryArgs, QueryResult, OutputFormat } from '../types';
 
+function isFiniteNumber(value: any): value is number {
+  return Number.isFinite(value);
+}
+
 export class HealthQueryTool {
   private db: HealthDataDB;
   private cache: QueryCache;
@@ -90,11 +94,10 @@ export class HealthQueryTool {
     
     // Rows
     for (const row of result.rows) {
-      lines.push(row.map(val => 
-        typeof val === 'string' && val.includes(',') 
-          ? `"${val}"` 
-          : String(val ?? '')
-      ).join(','));
+      lines.push(row.map(val => {
+        const text = String(val ?? '');
+        return text.includes(',') ? `"${text}"` : text;
+      }).join(','));
     }
     
     return lines.join('\\n');
@@ -111,8 +114,8 @@ export class HealthQueryTool {
       summary.sampleRows = result.rows.slice(0, 5);
       
       // Add basic statistics for numeric columns
-      const numericColumns = result.columns.filter((col, idx) => 
-        result.rows.some(row => typeof row[idx] === 'number')
+      const numericColumns = result.columns.filter((col, idx) =>
+        result.rows.some(row => isFiniteNumber(row[idx]))
       );
       
       if (numericColumns.length > 0) {
@@ -122,7 +125,7 @@ export class HealthQueryTool {
           const colIdx = result.columns.indexOf(col);
           const values = result.rows
             .map(row => row[colIdx])
-            .filter(val => typeof val === 'number') as number[];
+            .filter(isFiniteNumber);
           
           if (values.length > 0) {
             summary.statistics[col] = {

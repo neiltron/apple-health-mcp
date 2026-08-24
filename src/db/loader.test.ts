@@ -238,8 +238,8 @@ describe('TableLoader quantity tables', () => {
       FROM hkquantitytypeidentifierheartrate
       LIMIT 1
     `);
-    expect(typeof rows[0].value).toBe('number');
-    expect(typeof rows[0].valueText).toBe('string');
+    expect(rows[0].value).toBe(60);
+    expect(rows[0].valueText).toBe('60');
     expect(rows[0].unit).toBe('count/min');
 
     const numeric = await db.execute(`
