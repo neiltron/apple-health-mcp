@@ -72,6 +72,7 @@ export class HealthSchemaTool {
       availableTables: availableTables.sort(),
       tableDetails: {}
     };
+    const unitReference: Record<string, string> = {};
     
     // Get schema information for sample tables
     for (const tableName of sampleTables) {
@@ -132,16 +133,20 @@ export class HealthSchemaTool {
           WHERE startDate IS NOT NULL
         `);
         
+        const primaryUnit = unitInfo[0]?.unit || 'unknown';
         schema.tableDetails[tableName] = {
           columns: columns.map((col: any) => ({
             name: col.column_name,
             type: col.data_type
           })),
           units: unitInfo.map((u: any) => u.unit),
-          primaryUnit: unitInfo[0]?.unit || 'unknown',
+          primaryUnit,
           sampleRows: sampleData.slice(0, 2), // Show only 2 rows to keep response manageable
           statistics: stats[0] || {}
         };
+        if (primaryUnit !== 'unknown') {
+          unitReference[tableName] = primaryUnit;
+        }
         
       } catch (error) {
         schema.tableDetails[tableName] = {
@@ -182,13 +187,7 @@ export class HealthSchemaTool {
     ];
 
     // Build unit reference from all sampled tables
-    schema.unitReference = {} as Record<string, string>;
-    for (const [tableName, details] of Object.entries(schema.tableDetails)) {
-      const tableDetails = details as any;
-      if (tableDetails.primaryUnit && tableDetails.primaryUnit !== 'unknown') {
-        schema.unitReference[tableName] = tableDetails.primaryUnit;
-      }
-    }
+    schema.unitReference = unitReference;
 
     return schema;
   }

@@ -11,11 +11,15 @@ export interface ScanConflict {
   message: string;
 }
 
+export interface CatalogTableInfo {
+  [tableName: string]: CatalogEntry;
+}
+
 // Serialization for the health://tables resource. Catalog entries also hold
 // local file paths and importer references, which stay out of protocol
 // responses; only these fields ever leave the process.
 export function projectTableInfo(
-  info: Record<string, CatalogEntry>
+  info: CatalogTableInfo
 ): Array<{ name: string; loaded: boolean; rowCount: number | null }> {
   return Object.entries(info)
     .map(([name, entry]) => ({
@@ -145,8 +149,8 @@ export class FileCatalog {
       .map(([name]) => name);
   }
 
-  getTableInfo(): Record<string, CatalogEntry> {
-    const info: Record<string, CatalogEntry> = {};
+  getTableInfo(): CatalogTableInfo {
+    const info: CatalogTableInfo = {};
     for (const [name, entry] of this.catalog) {
       info[name] = { ...entry };
     }

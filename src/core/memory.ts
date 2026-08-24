@@ -2,6 +2,13 @@ import type { HealthDataDB } from '../db/database';
 import type { FileCatalog } from '../db/catalog';
 import type { TableLoader } from '../db/loader';
 
+export interface MemoryStats {
+  maxMemoryMB: number;
+  estimatedUsageMB: number;
+  loadedTables: number;
+  totalTables: number;
+}
+
 export class MemoryManager {
   private db: HealthDataDB;
   private catalog: FileCatalog;
@@ -90,12 +97,7 @@ export class MemoryManager {
     }
   }
   
-  getMemoryStats(): {
-    maxMemoryMB: number;
-    estimatedUsageMB: number;
-    loadedTables: number;
-    totalTables: number;
-  } {
+  getMemoryStats(): MemoryStats {
     const loadedTables = this.catalog.getLoadedTables();
     const allTables = this.catalog.getAllTables();
     

@@ -10,6 +10,11 @@ interface ReportSection {
   summary: string;
 }
 
+interface DateRange {
+  start: string;
+  end: string;
+}
+
 export class HealthReportTool {
   private db: HealthDataDB;
   private cache: QueryCache;
@@ -60,7 +65,7 @@ export class HealthReportTool {
     type: 'weekly' | 'monthly' | 'custom',
     startDate?: string,
     endDate?: string
-  ): { start: string; end: string } {
+  ): DateRange {
     const now = new Date();
 
     switch (type) {

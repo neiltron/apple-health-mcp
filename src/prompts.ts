@@ -1,3 +1,5 @@
+import type { GetPromptResult } from "@modelcontextprotocol/sdk/types.js";
+
 // Prompt templates exposed over MCP prompts/list and prompts/get. Each prompt
 // compiles the data-model rules from docs/querying.md into instructions a
 // client model can follow with the health_schema/health_query/health_report
@@ -10,6 +12,14 @@ export interface PromptDefinition {
     name: string;
     description: string;
     required: boolean;
+  }>;
+}
+
+export interface PromptMessages extends GetPromptResult {
+  description: string;
+  messages: Array<{
+    role: "user";
+    content: { type: "text"; text: string };
   }>;
 }
 
@@ -69,7 +79,7 @@ function positiveInt(raw: string | undefined, fallback: number): number {
 export function buildPromptMessages(
   name: string,
   args: Record<string, string | undefined>
-): { description: string; messages: Array<{ role: "user"; content: { type: "text"; text: string } }> } {
+): PromptMessages {
   const definition = PROMPTS.find((prompt) => prompt.name === name);
   if (!definition) {
     throw new Error(`Unknown prompt: ${name}`);
