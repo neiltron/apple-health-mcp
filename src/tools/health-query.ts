@@ -30,7 +30,7 @@ export class HealthQueryTool {
     const { query, format = 'json' } = args;
 
     // Validate query
-    this.validateQuery(query);
+    await this.validateQuery(query);
 
     await this.loader.ensureTablesForQuery(query);
 
@@ -55,25 +55,18 @@ export class HealthQueryTool {
     return this.formatResult(result, format);
   }
   
-  private validateQuery(query: string): void {
-    const forbidden = ['drop', 'delete', 'truncate', 'insert', 'update', 'create table', 'alter'];
-    const queryLower = query.toLowerCase();
-
-    for (const keyword of forbidden) {
-      if (queryLower.includes(keyword)) {
-        throw new Error(`Query contains forbidden keyword: ${keyword}`);
-      }
-    }
-
-    // Configuration statements could re-enable disk spill or change limits the
-    // server set at startup. Word boundaries keep OFFSET and column names legal.
-    const configStatement = /\b(set|reset|pragma)\b/i.exec(query);
-    if (configStatement) {
-      throw new Error(`Query contains forbidden keyword: ${configStatement[1].toLowerCase()}`);
-    }
-
-    if (!queryLower.includes('select')) {
-      throw new Error('Only SELECT queries are allowed');
+  // The filesystem boundary is enforced at the engine (allowed_directories +
+  // locked config, see database.ts). This validator adds the one thing the
+  // engine leaves open: it rejects anything that is not a single read-only
+  // SELECT statement, so COPY (SELECT ...) TO a file inside the data directory
+  // cannot write health data out. Statement kind and count are decided by
+  // DuckDB's own parser, not substring matching, so complex queries — joins,
+  // CTEs, nested subqueries, UNION — are all accepted, and a string literal
+  // containing "reset" or "drop" is no longer a false positive.
+  private async validateQuery(query: string): Promise<void> {
+    const singleSelect = await this.db.isSingleSelect(query);
+    if (!singleSelect) {
+      throw new Error('Only a single read-only SELECT statement is allowed');
     }
   }
   

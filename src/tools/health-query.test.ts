@@ -54,6 +54,63 @@ describe('HealthQueryTool accepted queries', () => {
     });
     expect(result.rowCount).toBe(1);
   });
+
+  // The validator restricts statement kind and count, never query shape: a
+  // single read-only SELECT of any internal complexity is accepted.
+  const complexAccepted: Array<[string, string]> = [
+    [
+      'a self-join',
+      `SELECT a.value FROM hkquantitytypeidentifierheartrate a
+       JOIN hkquantitytypeidentifierheartrate b ON DATE(a.startDate) = DATE(b.startDate)`
+    ],
+    [
+      'a CTE feeding an aggregate',
+      `WITH daily AS (
+         SELECT DATE(startDate) AS d, AVG(value) AS avg_hr
+         FROM hkquantitytypeidentifierheartrate GROUP BY d
+       ) SELECT MAX(avg_hr) FROM daily`
+    ],
+    [
+      'a correlated subquery in WHERE',
+      `SELECT value FROM hkquantitytypeidentifierheartrate a
+       WHERE value = (SELECT MAX(value) FROM hkquantitytypeidentifierheartrate b
+                      WHERE DATE(b.startDate) = DATE(a.startDate))`
+    ],
+    [
+      'a scalar subquery in the select list',
+      `SELECT value, (SELECT COUNT(*) FROM hkquantitytypeidentifierheartrate) AS total
+       FROM hkquantitytypeidentifierheartrate`
+    ],
+    [
+      'a UNION ALL of two selects',
+      `SELECT value FROM hkquantitytypeidentifierheartrate
+       UNION ALL SELECT value FROM hkquantitytypeidentifierheartrate`
+    ],
+    ['a trailing semicolon', 'SELECT COUNT(*) FROM hkquantitytypeidentifierheartrate;'],
+    ['FROM-first syntax', 'FROM hkquantitytypeidentifierheartrate SELECT AVG(value)']
+  ];
+
+  for (const [label, query] of complexAccepted) {
+    test(`accepts ${label}`, async () => {
+      const result = await tool.execute({ query });
+      expect(result.rowCount).toBeGreaterThanOrEqual(1);
+    });
+  }
+
+  // String literals and identifiers that merely contain a former blocklist
+  // keyword are no longer false positives, because the parser decides.
+  const falsePositivesFixed: Array<[string, string]> = [
+    ['a literal containing "drop table"', "SELECT 'drop table users' AS note"],
+    ['a literal containing "reset"', "SELECT 'please reset your goals' AS tip"],
+    ['a literal containing "delete"', "SELECT 'delete me' AS label"]
+  ];
+
+  for (const [label, query] of falsePositivesFixed) {
+    test(`accepts ${label}`, async () => {
+      const result = await tool.execute({ query });
+      expect(result.rowCount).toBe(1);
+    });
+  }
 });
 
 describe('HealthQueryTool output formats', () => {
@@ -96,26 +153,50 @@ describe('HealthQueryTool output formats', () => {
 });
 
 describe('HealthQueryTool rejected queries', () => {
+  const REJECTION = 'Only a single read-only SELECT statement is allowed';
+
+  // Anything that is not exactly one read-only SELECT is rejected. The engine
+  // sandbox blocks the file/config reachability underneath these; this check is
+  // the layer that also stops the one write form the engine permits —
+  // COPY (SELECT ...) TO a file inside the data directory.
   const rejected: Array<[string, string]> = [
-    ["SET max_temp_directory_size = '10GB'", 'set'],
-    ['SELECT 1; PRAGMA database_list', 'pragma'],
-    ['RESET memory_limit', 'reset'],
-    ['DROP TABLE hkquantitytypeidentifierheartrate', 'drop'],
-    ['INSERT INTO hkquantitytypeidentifierheartrate VALUES (1)', 'insert'],
-    ['UPDATE hkquantitytypeidentifierheartrate SET value = 0', 'update']
+    ['a config statement (SET)', "SET max_temp_directory_size = '10GB'"],
+    ['a config statement (RESET)', 'RESET memory_limit'],
+    ['a config statement (PRAGMA)', 'PRAGMA database_list'],
+    ['a second statement after a SELECT', 'SELECT 1; PRAGMA database_list'],
+    ['two SELECT statements', 'SELECT 1; SELECT 2'],
+    ['DROP', 'DROP TABLE hkquantitytypeidentifierheartrate'],
+    ['INSERT', 'INSERT INTO hkquantitytypeidentifierheartrate VALUES (1)'],
+    ['UPDATE', 'UPDATE hkquantitytypeidentifierheartrate SET value = 0'],
+    ['DELETE', 'DELETE FROM hkquantitytypeidentifierheartrate'],
+    ['COPY ... TO (writes health data out even inside the data dir)', "COPY (SELECT 1) TO 'leak.csv'"],
+    ['ATTACH', "ATTACH '/tmp/x.db'"],
+    ['empty input', ''],
+    ['whitespace only', '   '],
+    ['unparseable garbage', 'not a query at all']
   ];
 
-  for (const [query, keyword] of rejected) {
-    test(`rejects ${keyword}`, async () => {
-      await expect(tool.execute({ query })).rejects.toThrow(
-        `forbidden keyword: ${keyword}`
-      );
+  for (const [label, query] of rejected) {
+    test(`rejects ${label}`, async () => {
+      await expect(tool.execute({ query })).rejects.toThrow(REJECTION);
     });
   }
 
-  test('rejects a statement with no SELECT', async () => {
-    await expect(tool.execute({ query: 'SHOW TABLES' })).rejects.toThrow(
-      'Only SELECT queries are allowed'
-    );
-  });
+  // A file/URL read is a valid single SELECT, so it passes the validator and is
+  // stopped by the engine sandbox instead. This proves the two layers are
+  // independent: the read never succeeds even though the validator allows the
+  // statement shape.
+  const engineBlocked: Array<[string, string]> = [
+    ['a local file read via read_text', "SELECT * FROM read_text('/etc/hosts')"],
+    ['a URL read via read_csv', "SELECT * FROM read_csv('https://example.com/x.csv')"]
+  ];
+
+  for (const [label, query] of engineBlocked) {
+    test(`blocks ${label} at the engine`, async () => {
+      // Not the validator's message — the engine's Permission Error.
+      const error = await tool.execute({ query }).then(() => null, (e: Error) => e);
+      expect(error).not.toBeNull();
+      expect(error!.message).not.toContain(REJECTION);
+    });
+  }
 });

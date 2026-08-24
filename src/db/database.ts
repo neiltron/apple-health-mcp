@@ -77,12 +77,42 @@ export class HealthDataDB {
   
   async execute(query: string, sessionId?: string): Promise<any[]> {
     const conn = await this.getConnection(sessionId);
-    
+
     return new Promise((resolve, reject) => {
       conn.all(query, (err, result) => {
         if (err) reject(err);
         else resolve(result);
       });
+    });
+  }
+
+  // Asks DuckDB's own parser whether `query` is exactly one read-only SELECT
+  // statement. json_serialize_sql serializes only SELECT statements: it returns
+  // error=true for any non-SELECT form (COPY, ATTACH, PRAGMA, a syntax error)
+  // and one statement object per SELECT, so a single SELECT — however complex,
+  // with joins, CTEs, or subqueries — yields error=false with exactly one
+  // statement. The query is passed as a bound parameter and never interpolated
+  // into the validation SQL; the ::VARCHAR cast is required by the bindings.
+  async isSingleSelect(query: string, sessionId?: string): Promise<boolean> {
+    const conn = await this.getConnection(sessionId);
+
+    return new Promise((resolve, reject) => {
+      conn.all(
+        'SELECT json_serialize_sql(?::VARCHAR) AS ast',
+        query,
+        (err, result) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+          try {
+            const ast = JSON.parse(String(result[0]?.ast ?? '{}'));
+            resolve(ast.error === false && Array.isArray(ast.statements) && ast.statements.length === 1);
+          } catch (parseError) {
+            reject(parseError);
+          }
+        }
+      );
     });
   }
   
