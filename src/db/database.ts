@@ -27,14 +27,31 @@ export class HealthDataDB {
     await this.setupDatabase();
   }
   
+  // Directory names can contain a single quote ("Neil's Health"); escape it so
+  // the path stays inside its SQL literal, the same way the CSV loader does.
+  private sqlLiteral(value: string): string {
+    return value.replace(/'/g, "''");
+  }
+
   private async setupDatabase(): Promise<void> {
     return new Promise((resolve, reject) => {
+      // Security boundary (see docs/architecture.md "Query boundary"):
+      // confine all file access to the health data directory, disable external
+      // access, and lock the configuration so no later query can loosen any of
+      // it. read_csv on catalog files inside HEALTH_DATA_DIR keeps working;
+      // read_text('/etc/hosts'), COPY TO, ATTACH, and extension loading fail at
+      // the engine. lock_configuration must be the final statement.
+      //
       // Zero temporary capacity keeps health rows in memory. A load that does
       // not fit fails loudly instead of spilling personal data to disk.
+      const dataDir = this.sqlLiteral(this.config.dataDir);
       this.db.run(`
         SET memory_limit = '${this.config.maxMemoryMB}MB';
         SET threads = 4;
         SET max_temp_directory_size = '0 bytes';
+        SET allowed_directories = ['${dataDir}'];
+        SET enable_external_access = false;
+        SET lock_configuration = true;
       `, (err) => {
         if (err) reject(err);
         else resolve();
