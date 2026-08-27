@@ -72,11 +72,56 @@ The conformance suite in `src/test-helpers/conformance.ts` asserts this
 contract end-to-end for every importer; a new format adopts it by supplying
 fixtures.
 
-### Query safety and caching
+### Query guardrails
 
-`health_query` requires a statement containing `SELECT` and rejects a small
-blocklist of mutation keywords. This is a pragmatic guard, not a complete SQL
-parser or security boundary.
+`health_query` is intended for a trusted local MCP host/tool caller and applies
+two layers of query guardrails.
+
+At startup, `setupDatabase` disables disk spill, sets `allowed_directories` to
+`HEALTH_DATA_DIR`, disables external access, and locks the configuration. These
+engine settings are defense in depth: catalogued CSVs remain readable, while
+known file reads and writes outside the configured directory, URL access,
+`ATTACH`, and extension installation fail at execution. The configuration lock
+prevents later queries from loosening those settings. The directory allowlist
+permits both reads and writes inside `HEALTH_DATA_DIR`; for example, direct
+internal use of `COPY ... TO` an in-directory path succeeds. Loading an
+already-bundled extension can also succeed at the engine. The `health_query`
+policy separately rejects top-level `COPY` and `LOAD` statements.
+
+Before lazy loading, cache lookup, or execution, query inspection passes the raw
+SQL as a bound `VARCHAR` to DuckDB's `json_serialize_sql` parser. It accepts one
+parser-classified DuckDB SELECT-family analytical statement. The committed
+compatibility contract includes ordinary `SELECT`, joins, multiple CTEs,
+nested, scalar, and correlated subqueries, `UNION`, `UNION ALL`, `INTERSECT`,
+`EXCEPT`, FROM-first syntax, `DESCRIBE SELECT`, `SUMMARIZE`, `SHOW`, `TABLE`, and
+`VALUES`. Comments, whitespace, and a trailing semicolon are valid. Empty,
+malformed, or multiple statements and top-level DDL, DML, `COPY`, `ATTACH`,
+`INSTALL`, `LOAD`, `SET`, `RESET`, and `PRAGMA` forms are rejected. This is an
+enumerated compatibility contract, not a promise that every possible
+SELECT-family form is supported.
+
+The same inspection walks DuckDB's serialized syntax tree and rejects exact,
+case-normalized calls to five operations: `enable_logging`, `disable_logging`,
+`truncate_duckdb_logs`, `write_log`, and `query`. The first four control or emit
+DuckDB logs; `query(...)` is blocked because dynamic SQL could conceal those
+calls. `query_table(...)`, mathematical `log(...)`, and restricted words in
+literals, comments, aliases, or identifiers remain available. Parser rejection,
+restricted-operation rejection, and inspection infrastructure failure are
+separate fail-closed outcomes.
+
+These controls do not make arbitrary attacker-controlled SQL safe and are not
+an OS sandbox. The supported deployment is local `stdio` under the operator's
+OS account, with the operator controlling the MCP host, tool configuration, and
+who or what can submit tool arguments. Do not put an untrusted network bridge or
+direct caller in front of the tool. SQL deliberately controlled by an attacker,
+including model tool arguments directed by untrusted prompt content, requires
+process or OS isolation instead.
+
+Remaining risks in the trusted-client model include future side-effecting
+DuckDB functions, expensive queries without a timeout or CPU quota, reads
+through an interior symlink placed in `HEALTH_DATA_DIR`, engine or native-code
+vulnerabilities, and unknown operations that write inside the read/write
+allowlisted directory.
 
 Query results use an in-memory bounded cache. Aggregate queries receive a
 ten-minute TTL. For non-aggregate queries, requests involving `CURRENT_DATE` or
@@ -128,6 +173,8 @@ MCP client and are subject to that client's data handling.
 - One export format per data directory.
 - The database is in memory and is rebuilt per process; incremental or
   persistent import is planned future work.
-- Query validation and lazy-load table detection are string-based.
+- Query inspection accepts one DuckDB SELECT-family analytical statement and
+  blocks five selected operational functions; lazy-load table detection is
+  still string-based.
 - The implementation exposes tools only—no resources, prompts, HTTP transport,
   or hosted service.

@@ -1,6 +1,6 @@
 {
   "name": "@neiltron/apple-health-mcp",
-  "version": "1.4.2",
+  "version": "1.4.3",
   "mcpName": "io.github.neiltron/apple-health-mcp",
   "description": "Local-first Apple Health MCP server. Lets AI assistants answer questions about your sleep, workouts, activity and heart data from a local export.",
   "main": "dist/server.js",
@@ -49,7 +49,16 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
-    "duckdb": "^1.4.4"
+    "duckdb": "1.4.4"
+  },
+  "overrides": {
+    "node-gyp": "^11.0.0",
+    "path-to-regexp": "^8.4.2",
+    "qs": "^6.15.3",
+    "hono": "^4.13.4",
+    "tar": "^7.5.22",
+    "brace-expansion": "^2.1.3",
+    "ip-address": "^10.5.0"
   },
   "overrides": {
     "node-gyp": "^11.0.0",
