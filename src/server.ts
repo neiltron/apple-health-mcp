@@ -38,7 +38,7 @@ const healthQueryInputSchema = {
   properties: {
     query: {
       type: "string",
-      description: "SQL SELECT query to execute"
+      description: "One DuckDB SELECT-family analytical statement; supports ordinary SELECT, joins, multiple CTEs, nested/scalar/correlated subqueries, UNION, UNION ALL, INTERSECT, EXCEPT, FROM-first, DESCRIBE SELECT, SUMMARIZE, SHOW, TABLE, and VALUES"
     },
     format: {
       type: "string",
@@ -122,7 +122,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [
     {
       name: "health_query",
-      description: "Execute SQL queries on Apple Health data. Supports SELECT queries only.",
+      description: "Run one DuckDB SELECT-family analytical statement on Apple Health data. Calls to enable_logging, disable_logging, truncate_duckdb_logs, write_log, and query are blocked; query_table remains available. These guardrails assume a trusted local caller and do not sandbox attacker-controlled SQL.",
       inputSchema: healthQueryInputSchema
     },
     {

@@ -55,18 +55,21 @@ export class HealthQueryTool {
     return this.formatResult(result, format);
   }
   
-  // The filesystem boundary is enforced at the engine (allowed_directories +
-  // locked config, see database.ts). This validator adds the one thing the
-  // engine leaves open: it rejects anything that is not a single read-only
-  // SELECT statement, so COPY (SELECT ...) TO a file inside the data directory
-  // cannot write health data out. Statement kind and count are decided by
-  // DuckDB's own parser, not substring matching, so complex queries — joins,
-  // CTEs, nested subqueries, UNION — are all accepted, and a string literal
-  // containing "reset" or "drop" is no longer a false positive.
+  // Complete parser-backed statement inspection before lazy loading, cache
+  // lookup, or execution. Statement shape, restricted-function policy, and a
+  // validator malfunction are distinct fail-closed outcomes.
   private async validateQuery(query: string): Promise<void> {
-    const singleSelect = await this.db.isSingleSelect(query);
-    if (!singleSelect) {
-      throw new Error('Only a single read-only SELECT statement is allowed');
+    const inspection = await this.db.inspectQuery(query);
+
+    switch (inspection.outcome) {
+      case 'accepted':
+        return;
+      case 'statement-rejected':
+        throw new Error('Only one DuckDB SELECT-family statement is allowed');
+      case 'restricted-function':
+        throw new Error('Query uses a restricted operational function');
+      case 'validator-failure':
+        throw new Error('Query validation is unavailable');
     }
   }
   

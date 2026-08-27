@@ -72,41 +72,56 @@ The conformance suite in `src/test-helpers/conformance.ts` asserts this
 contract end-to-end for every importer; a new format adopts it by supplying
 fixtures.
 
-### Query boundary
+### Query guardrails
 
-`health_query` is confined by two independent layers.
+`health_query` is intended for a trusted local MCP host/tool caller and applies
+two layers of query guardrails.
 
-The engine sandbox is the enforcement of record. At startup `setupDatabase`
-sets `allowed_directories` to `HEALTH_DATA_DIR`, then `enable_external_access =
-false`, then `lock_configuration = true`. File access is therefore limited to
-the data directory — the loader's `read_csv` on catalog files keeps working,
-while `read_text('/etc/hosts')`, out-of-directory `COPY`, `ATTACH`, and
-extension *installation* (`INSTALL`, which needs external access) fail at
-execution — and no later query can loosen any of these settings, including
-re-enabling disk spill. Loading an already-bundled extension (`LOAD`) is not
-blocked at the engine; the validator layer stops it because `LOAD` is not a
-`SELECT`. This holds even when a query
-hides a file read inside a macro or a form the tool never parses: the engine
-stops the access at runtime regardless.
+At startup, `setupDatabase` disables disk spill, sets `allowed_directories` to
+`HEALTH_DATA_DIR`, disables external access, and locks the configuration. These
+engine settings are defense in depth: catalogued CSVs remain readable, while
+known file reads and writes outside the configured directory, URL access,
+`ATTACH`, and extension installation fail at execution. The configuration lock
+prevents later queries from loosening those settings. The directory allowlist
+permits both reads and writes inside `HEALTH_DATA_DIR`; for example, direct
+internal use of `COPY ... TO` an in-directory path succeeds. Loading an
+already-bundled extension can also succeed at the engine. The `health_query`
+policy separately rejects top-level `COPY` and `LOAD` statements.
 
-The validator adds the one thing the engine leaves open. Since the data
-directory is writable, `COPY (SELECT ...) TO` a file *inside* it would succeed
-at the engine. `health_query` rejects it by asking DuckDB's own parser
-(`json_serialize_sql`) whether the input is exactly one read-only `SELECT`
-statement; anything else — non-`SELECT` forms, multiple statements — is
-rejected before execution. Because the parser decides statement kind and count,
-a query of any internal complexity (joins, CTEs, nested subqueries, `UNION`) is
-accepted, and a string literal or column name containing a word like `drop` or
-`reset` is no longer a false positive.
+Before lazy loading, cache lookup, or execution, query inspection passes the raw
+SQL as a bound `VARCHAR` to DuckDB's `json_serialize_sql` parser. It accepts one
+parser-classified DuckDB SELECT-family analytical statement. The committed
+compatibility contract includes ordinary `SELECT`, joins, multiple CTEs,
+nested, scalar, and correlated subqueries, `UNION`, `UNION ALL`, `INTERSECT`,
+`EXCEPT`, FROM-first syntax, `DESCRIBE SELECT`, `SUMMARIZE`, `SHOW`, `TABLE`, and
+`VALUES`. Comments, whitespace, and a trailing semicolon are valid. Empty,
+malformed, or multiple statements and top-level DDL, DML, `COPY`, `ATTACH`,
+`INSTALL`, `LOAD`, `SET`, `RESET`, and `PRAGMA` forms are rejected. This is an
+enumerated compatibility contract, not a promise that every possible
+SELECT-family form is supported.
 
-These settings are defense-in-depth for a local single-user stdio server, not
-OS-level process sandboxing; DuckDB's own guidance is explicit that engine
-settings are not a substitute for sandboxing untrusted SQL at the process
-level. One known limitation: `allowed_directories` does not canonicalize paths,
-so a symlink placed *inside* the data directory pointing outside it can be
-read. Reaching this requires an attacker who can write a symlink into the data
-directory, which is outside the query-sending threat model this boundary
-targets.
+The same inspection walks DuckDB's serialized syntax tree and rejects exact,
+case-normalized calls to five operations: `enable_logging`, `disable_logging`,
+`truncate_duckdb_logs`, `write_log`, and `query`. The first four control or emit
+DuckDB logs; `query(...)` is blocked because dynamic SQL could conceal those
+calls. `query_table(...)`, mathematical `log(...)`, and restricted words in
+literals, comments, aliases, or identifiers remain available. Parser rejection,
+restricted-operation rejection, and inspection infrastructure failure are
+separate fail-closed outcomes.
+
+These controls do not make arbitrary attacker-controlled SQL safe and are not
+an OS sandbox. The supported deployment is local `stdio` under the operator's
+OS account, with the operator controlling the MCP host, tool configuration, and
+who or what can submit tool arguments. Do not put an untrusted network bridge or
+direct caller in front of the tool. SQL deliberately controlled by an attacker,
+including model tool arguments directed by untrusted prompt content, requires
+process or OS isolation instead.
+
+Remaining risks in the trusted-client model include future side-effecting
+DuckDB functions, expensive queries without a timeout or CPU quota, reads
+through an interior symlink placed in `HEALTH_DATA_DIR`, engine or native-code
+vulnerabilities, and unknown operations that write inside the read/write
+allowlisted directory.
 
 Query results use an in-memory bounded cache. Aggregate queries receive a
 ten-minute TTL. For non-aggregate queries, requests involving `CURRENT_DATE` or
@@ -158,7 +173,8 @@ MCP client and are subject to that client's data handling.
 - One export format per data directory.
 - The database is in memory and is rebuilt per process; incremental or
   persistent import is planned future work.
-- Query validation uses DuckDB's parser (single read-only `SELECT`); lazy-load
-  table detection is still string-based.
+- Query inspection accepts one DuckDB SELECT-family analytical statement and
+  blocks five selected operational functions; lazy-load table detection is
+  still string-based.
 - The implementation exposes tools only—no resources, prompts, HTTP transport,
   or hosted service.

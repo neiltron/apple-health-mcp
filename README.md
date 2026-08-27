@@ -5,7 +5,7 @@
 
 Query Apple Health data from an MCP client using SQL and DuckDB. The server runs
 locally, reads CSV exports on demand, and provides tools for schema discovery,
-read-only queries, and health summaries.
+analytical queries, and health summaries.
 
 ## Requirements
 
@@ -61,12 +61,35 @@ sent to that client's configured model provider.
 | Tool | Purpose |
 | --- | --- |
 | `health_schema` | Discover table names, columns, units, and sample rows |
-| `health_query` | Run a read-only `SELECT` query with JSON, CSV, or summary output |
+| `health_query` | Run one DuckDB SELECT-family analytical statement with JSON, CSV, or summary output |
 | `health_report` | Generate a weekly, monthly, or custom health summary |
 
 Start with `health_schema`; table names depend on the files in your export.
 See [Querying Apple Health data](https://github.com/neiltron/apple-health-mcp/blob/main/docs/querying.md)
 for the data model and working examples.
+
+`health_query` accepts exactly one DuckDB SELECT-family analytical statement.
+The supported contract includes ordinary `SELECT`, joins, multiple CTEs,
+nested, scalar, and correlated subqueries, `UNION`, `UNION ALL`, `INTERSECT`,
+`EXCEPT`, FROM-first syntax, `DESCRIBE SELECT`, `SUMMARIZE`, `SHOW`, `TABLE`, and
+`VALUES`. It rejects top-level mutation/configuration forms and calls to
+`enable_logging`, `disable_logging`, `truncate_duckdb_logs`, `write_log`, or
+dynamic-SQL `query(...)`; `query_table(...)` remains available.
+
+## Local trust and query guardrails
+
+Run the server through a local `stdio` MCP host under your OS account, and trust
+that host and its tool caller not to submit attacker-controlled SQL. Do not put
+an untrusted network bridge or direct caller in front of `health_query`.
+Prompt-injected or deliberately attacker-directed tool arguments are outside
+the supported threat model without process or OS isolation.
+
+DuckDB's filesystem, external-access, configuration-lock, memory, and no-spill
+settings are defense in depth, not a sandbox. They constrain outside-directory
+file access, network access, configuration changes, and temporary spill, but
+the allowlisted health-data directory remains readable and writable. Future
+side-effecting engine functions, expensive queries, interior symlinks, and
+engine/native-code vulnerabilities remain possible.
 
 ## History and memory
 
