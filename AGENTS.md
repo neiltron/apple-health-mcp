@@ -41,23 +41,18 @@ normalized data model.
 
 - Never write logs or diagnostics to stdout while the MCP transport is active;
   stdout is reserved for protocol messages.
-- Preserve the `health_query` guardrail contract: accept exactly one DuckDB
-  SELECT-family analytical statement as classified by DuckDB's parser, then
-  reject exact calls to `enable_logging`, `disable_logging`,
-  `truncate_duckdb_logs`, `write_log`, and `query` before lazy loading, cache
-  lookup, or execution. Keep joins, multiple CTEs, nested/scalar/correlated
-  subqueries, `UNION`, `UNION ALL`, `INTERSECT`, `EXCEPT`, FROM-first syntax,
+- Preserve the `health_query` query checks. Accept one DuckDB analytical
+  statement. Reject logging functions, `query`, and
+  `json_execute_serialized_sql` before loading, cache lookup, or execution.
+  Keep joins, CTEs, subqueries, set operations, FROM-first syntax,
   `DESCRIBE SELECT`, `SUMMARIZE`, `SHOW`, `TABLE`, and `VALUES` covered by
-  acceptance tests; keep top-level mutation/configuration forms and multiple
-  statements covered by rejection tests. `query_table` remains supported.
-- Do not describe SELECT-family inspection as semantic read-only enforcement or
-  as safe handling of attacker-controlled SQL. The supported deployment trusts
-  the local `stdio` MCP host/tool caller under the operator's OS account; an
-  untrusted bridge, direct caller, or prompt-directed attacker requires process
-  or OS isolation.
-- Treat DuckDB filesystem, external-access, configuration-lock, memory, and
-  no-spill settings as defense in depth, not a sandbox. `allowed_directories`
-  permits reads and writes inside `HEALTH_DATA_DIR`.
+  acceptance tests. Keep data changes, setting changes, and multiple statements
+  covered by rejection tests. `query_table` remains supported.
+- Do not call the query checks a security boundary or an OS sandbox. Untrusted
+  SQL requires process or OS isolation.
+- Keep DuckDB file, external-access, configuration-lock, memory, and no-spill
+  settings enabled. `allowed_directories` permits reads and writes inside
+  `HEALTH_DATA_DIR`.
 - Preserve lazy loading unless a deliberate architecture change replaces it.
 - Category labels such as sleep stages live in `valueText`; their numeric
   `value` is `NULL`.

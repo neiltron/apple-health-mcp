@@ -222,6 +222,10 @@ describe('HealthDataDB query inspection', () => {
       'dynamic SQL containing enable_logging',
       "SELECT * FROM query('SELECT * FROM enable_logging(storage := ''stdout'')')"
     ],
+    [
+      'serialized SQL execution',
+      "SELECT * FROM json_execute_serialized_sql('{}')"
+    ],
     ['uppercase spelling', "SELECT WRITE_LOG('marker')"],
     ['mixed-case spelling', "SELECT WrItE_LoG('marker')"],
     ['quoted spelling', `SELECT "write_log"('marker')`],
@@ -236,6 +240,26 @@ describe('HealthDataDB query inspection', () => {
       });
     });
   }
+
+  test('blocks serialized SQL that hides a restricted function', async () => {
+    const serialized = await db.execute(
+      "SELECT json_serialize_sql('SELECT * FROM enable_logging(storage := ''stdout'')') AS ast"
+    );
+    const ast = String(serialized[0].ast).replace(/'/g, "''");
+    const query = `SELECT * FROM json_execute_serialized_sql('${ast}')`;
+
+    await expect(db.inspectQuery(query)).resolves.toEqual({
+      outcome: 'restricted-function'
+    });
+    await expect(tool.execute({ query })).rejects.toThrow(
+      'Query uses a restricted operational function'
+    );
+
+    const settings = await db.execute(
+      "SELECT current_setting('enable_logging') AS enabled"
+    );
+    expect(Number(settings[0].enabled)).toBe(0);
+  });
 
   test('distinguishes accepted and statement-shape outcomes', async () => {
     await expect(db.inspectQuery('SELECT 1')).resolves.toEqual({

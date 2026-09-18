@@ -72,56 +72,39 @@ The conformance suite in `src/test-helpers/conformance.ts` asserts this
 contract end-to-end for every importer; a new format adopts it by supplying
 fixtures.
 
-### Query guardrails
+### Query safeguards
 
-`health_query` is intended for a trusted local MCP host/tool caller and applies
-two layers of query guardrails.
+`health_query` has two control layers.
 
-At startup, `setupDatabase` disables disk spill, sets `allowed_directories` to
-`HEALTH_DATA_DIR`, disables external access, and locks the configuration. These
-engine settings are defense in depth: catalogued CSVs remain readable, while
-known file reads and writes outside the configured directory, URL access,
-`ATTACH`, and extension installation fail at execution. The configuration lock
-prevents later queries from loosening those settings. The directory allowlist
-permits both reads and writes inside `HEALTH_DATA_DIR`; for example, direct
-internal use of `COPY ... TO` an in-directory path succeeds. Loading an
-already-bundled extension can also succeed at the engine. The `health_query`
-policy separately rejects top-level `COPY` and `LOAD` statements.
+At startup, `setupDatabase` disables temporary disk storage. It limits file
+access to `HEALTH_DATA_DIR`, disables external access, and locks these settings.
+Reads and writes outside the data directory fail. URL access, `ATTACH`, and
+extension installation also fail. The data directory stays readable and
+writable so the importer can read CSV files. DuckDB can still load a bundled
+extension. The query check rejects top-level `COPY` and `LOAD` statements.
 
-Before lazy loading, cache lookup, or execution, query inspection passes the raw
-SQL as a bound `VARCHAR` to DuckDB's `json_serialize_sql` parser. It accepts one
-parser-classified DuckDB SELECT-family analytical statement. The committed
-compatibility contract includes ordinary `SELECT`, joins, multiple CTEs,
-nested, scalar, and correlated subqueries, `UNION`, `UNION ALL`, `INTERSECT`,
-`EXCEPT`, FROM-first syntax, `DESCRIBE SELECT`, `SUMMARIZE`, `SHOW`, `TABLE`, and
-`VALUES`. Comments, whitespace, and a trailing semicolon are valid. Empty,
-malformed, or multiple statements and top-level DDL, DML, `COPY`, `ATTACH`,
-`INSTALL`, `LOAD`, `SET`, `RESET`, and `PRAGMA` forms are rejected. This is an
-enumerated compatibility contract, not a promise that every possible
-SELECT-family form is supported.
+Before execution, the server sends the SQL to DuckDB's `json_serialize_sql`
+parser as a bound `VARCHAR`. The server accepts one analytical statement. The
+supported forms include `SELECT`, joins, CTEs, subqueries, set operations,
+FROM-first syntax, `DESCRIBE SELECT`, `SUMMARIZE`, `SHOW`, `TABLE`, and `VALUES`.
+Comments and a trailing semicolon are valid. The server rejects invalid or
+multiple statements. It also rejects top-level DDL, DML, `COPY`, `ATTACH`,
+`INSTALL`, `LOAD`, `SET`, `RESET`, and `PRAGMA` statements.
 
-The same inspection walks DuckDB's serialized syntax tree and rejects exact,
-case-normalized calls to five operations: `enable_logging`, `disable_logging`,
-`truncate_duckdb_logs`, `write_log`, and `query`. The first four control or emit
-DuckDB logs; `query(...)` is blocked because dynamic SQL could conceal those
-calls. `query_table(...)`, mathematical `log(...)`, and restricted words in
-literals, comments, aliases, or identifiers remain available. Parser rejection,
-restricted-operation rejection, and inspection infrastructure failure are
-separate fail-closed outcomes.
+The server also checks function names in the parsed syntax tree. It rejects
+`enable_logging`, `disable_logging`, `truncate_duckdb_logs`, and `write_log`.
+It rejects `query` and `json_execute_serialized_sql` because these functions can
+hide a restricted operation. `query_table` and mathematical `log` remain
+available. A parser or inspection failure stops the query.
 
-These controls do not make arbitrary attacker-controlled SQL safe and are not
-an OS sandbox. The supported deployment is local `stdio` under the operator's
-OS account, with the operator controlling the MCP host, tool configuration, and
-who or what can submit tool arguments. Do not put an untrusted network bridge or
-direct caller in front of the tool. SQL deliberately controlled by an attacker,
-including model tool arguments directed by untrusted prompt content, requires
-process or OS isolation instead.
+These controls reduce accidental side effects from generated SQL. They do not
+isolate the process. The supported configuration is a local `stdio` MCP server.
+Do not expose it to an untrusted network client. Use process or OS isolation if
+the server must accept untrusted SQL.
 
-Remaining risks in the trusted-client model include future side-effecting
-DuckDB functions, expensive queries without a timeout or CPU quota, reads
-through an interior symlink placed in `HEALTH_DATA_DIR`, engine or native-code
-vulnerabilities, and unknown operations that write inside the read/write
-allowlisted directory.
+Remaining risks include expensive queries without a timeout or CPU limit,
+future DuckDB functions with side effects, symbolic links in the data directory,
+engine defects, and writes to the data directory.
 
 Query results use an in-memory bounded cache. Aggregate queries receive a
 ten-minute TTL. For non-aggregate queries, requests involving `CURRENT_DATE` or

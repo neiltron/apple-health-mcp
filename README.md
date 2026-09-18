@@ -68,28 +68,22 @@ Start with `health_schema`; table names depend on the files in your export.
 See [Querying Apple Health data](https://github.com/neiltron/apple-health-mcp/blob/main/docs/querying.md)
 for the data model and working examples.
 
-`health_query` accepts exactly one DuckDB SELECT-family analytical statement.
-The supported contract includes ordinary `SELECT`, joins, multiple CTEs,
-nested, scalar, and correlated subqueries, `UNION`, `UNION ALL`, `INTERSECT`,
-`EXCEPT`, FROM-first syntax, `DESCRIBE SELECT`, `SUMMARIZE`, `SHOW`, `TABLE`, and
-`VALUES`. It rejects top-level mutation/configuration forms and calls to
-`enable_logging`, `disable_logging`, `truncate_duckdb_logs`, `write_log`, or
-dynamic-SQL `query(...)`; `query_table(...)` remains available.
+`health_query` accepts one DuckDB analytical statement. It supports joins,
+CTEs, subqueries, set operations, window functions, and other DuckDB analysis
+features. It rejects statements that change data or database settings. It also
+rejects logging functions and functions that execute dynamic or serialized SQL.
 
-## Local trust and query guardrails
+## Query safeguards
 
-Run the server through a local `stdio` MCP host under your OS account, and trust
-that host and its tool caller not to submit attacker-controlled SQL. Do not put
-an untrusted network bridge or direct caller in front of `health_query`.
-Prompt-injected or deliberately attacker-directed tool arguments are outside
-the supported threat model without process or OS isolation.
+The server limits DuckDB file access to `HEALTH_DATA_DIR`. It also disables
+network access and temporary disk storage, and it locks the database settings.
+The data directory stays readable and writable so the importer can read CSV
+files.
 
-DuckDB's filesystem, external-access, configuration-lock, memory, and no-spill
-settings are defense in depth, not a sandbox. They constrain outside-directory
-file access, network access, configuration changes, and temporary spill, but
-the allowlisted health-data directory remains readable and writable. Future
-side-effecting engine functions, expensive queries, interior symlinks, and
-engine/native-code vulnerabilities remain possible.
+These controls reduce accidental side effects from generated SQL. They do not
+isolate the process. Run the server through a local `stdio` MCP client. Do not
+expose it to an untrusted network client. Use process or OS isolation if the
+server must accept untrusted SQL.
 
 ## History and memory
 

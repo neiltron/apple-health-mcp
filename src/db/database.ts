@@ -14,7 +14,8 @@ const RESTRICTED_QUERY_FUNCTIONS = new Set([
   'disable_logging',
   'truncate_duckdb_logs',
   'write_log',
-  'query'
+  'query',
+  'json_execute_serialized_sql'
 ]);
 
 type SerializedAstValue = string | number | boolean | null | undefined | SerializedAstObject | SerializedAstValue[];
@@ -120,14 +121,11 @@ export class HealthDataDB {
   
   private async setupDatabase(): Promise<void> {
     return new Promise((resolve, reject) => {
-      // Engine defense in depth (see docs/architecture.md "Query guardrails"):
-      // constrain file access outside the health data directory, disable
-      // external access, and lock the configuration so later queries cannot
-      // loosen those settings. The allowlisted directory remains readable and
-      // writable: catalog read_csv calls and direct in-directory COPY work.
-      // Bundled LOAD can also succeed at the engine; health_query's separate
-      // statement gate rejects top-level COPY and LOAD. lock_configuration
-      // must be the final statement.
+      // Limit file access to the health data directory. Also disable external
+      // access and lock these settings. The data directory stays readable and
+      // writable so the importer can read CSV files. DuckDB can still load a
+      // bundled extension. The query check rejects top-level COPY and LOAD.
+      // lock_configuration must be the final statement.
       //
       // Zero temporary capacity keeps health rows in memory. A load that does
       // not fit fails loudly instead of spilling personal data to disk.
@@ -175,9 +173,8 @@ export class HealthDataDB {
 
   // DuckDB's serializer provides statement-family/count classification and an
   // AST to inspect; it does not prove semantic read-only behavior. Keep the
-  // policy narrow by scanning only exact function_name fields for the known
-  // logging operations and their dynamic-SQL bypass. Query text remains a
-  // bound VARCHAR, never interpolated into the validator SQL.
+  // policy narrow by scanning exact function_name fields for logging and SQL
+  // execution functions. The validator receives query text as a bound VARCHAR.
   async inspectQuery(query: string, sessionId?: string): Promise<QueryInspection> {
     let conn: Connection;
     try {
