@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { execFileSync, spawn } from 'node:child_process';
+import { once } from 'node:events';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
@@ -18,10 +19,6 @@ interface JsonRpcResponse {
     code: number;
     message: string;
   };
-}
-
-function isNumber(value: any): value is number {
-  return Object(value) instanceof Number && Object(value) !== value;
 }
 
 let buildDir: string;
@@ -57,7 +54,6 @@ afterAll(() => {
 
 function protocolSession(child: ChildProcessWithoutNullStreams) {
   const stdoutLines: string[] = [];
-  const responses = new Map<number, JsonRpcResponse>();
   const waiters = new Map<number, (response: JsonRpcResponse) => void>();
   let buffer = '';
 
@@ -74,13 +70,11 @@ function protocolSession(child: ChildProcessWithoutNullStreams) {
         // SAFETY: the test server is the producer; required response fields are
         // checked before use and malformed lines remain in stdoutLines.
         const response = JSON.parse(line) as JsonRpcResponse;
-        if (!isNumber(response.id)) continue;
+        if (response.id === undefined) continue;
         const waiter = waiters.get(response.id);
         if (waiter) {
           waiters.delete(response.id);
           waiter(response);
-        } else {
-          responses.set(response.id, response);
         }
       } catch {
         // Retain native/non-protocol output for the assertions below.
@@ -94,12 +88,6 @@ function protocolSession(child: ChildProcessWithoutNullStreams) {
 
   const request = (id: number, method: string, params: JsonRpcObject): Promise<JsonRpcResponse> => {
     send({ jsonrpc: '2.0', id, method, params });
-    const existing = responses.get(id);
-    if (existing) {
-      responses.delete(id);
-      return Promise.resolve(existing);
-    }
-
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
         waiters.delete(id);
@@ -121,26 +109,8 @@ function protocolSession(child: ChildProcessWithoutNullStreams) {
 
 async function stopChild(child: ChildProcessWithoutNullStreams): Promise<void> {
   if (child.exitCode !== null) return;
-
-  await new Promise<void>((resolve, reject) => {
-    let forceKill: ReturnType<typeof setTimeout> | undefined;
-    let closeDeadline: ReturnType<typeof setTimeout> | undefined;
-    const handleClose = () => {
-      if (forceKill) clearTimeout(forceKill);
-      if (closeDeadline) clearTimeout(closeDeadline);
-      resolve();
-    };
-
-    child.once('close', handleClose);
-    child.kill('SIGINT');
-    forceKill = setTimeout(() => {
-      child.kill('SIGKILL');
-      closeDeadline = setTimeout(() => {
-        child.removeListener('close', handleClose);
-        reject(new Error('Timed out waiting for MCP test server to stop'));
-      }, 1_000);
-    }, 2_000);
-  });
+  child.kill('SIGINT');
+  await once(child, 'close', { signal: AbortSignal.timeout(3_000) }).catch(() => child.kill('SIGKILL'));
 }
 
 describe('built MCP stdio query guardrails', () => {
