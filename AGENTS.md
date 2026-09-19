@@ -43,14 +43,11 @@ normalized data model.
   stdout is reserved for protocol messages.
 - Preserve the `health_query` guardrail contract: accept exactly one DuckDB
   SELECT-family analytical statement as classified by DuckDB's parser, then
-  reject exact calls to `enable_logging`, `disable_logging`,
-  `truncate_duckdb_logs`, `write_log`, `query`, and
-  `json_execute_serialized_sql` before lazy loading, cache lookup, or
-  execution. Keep joins, multiple CTEs, nested/scalar/correlated
-  subqueries, `UNION`, `UNION ALL`, `INTERSECT`, `EXCEPT`, FROM-first syntax,
-  `DESCRIBE SELECT`, `SUMMARIZE`, `SHOW`, `TABLE`, and `VALUES` covered by
-  acceptance tests; keep top-level mutation/configuration forms and multiple
-  statements covered by rejection tests. `query_table` remains supported.
+  reject the restricted functions before lazy loading, cache lookup, or
+  execution. The supported forms and restricted functions are enumerated in
+  `docs/architecture.md` under "Query guardrails"; keep each accepted form and
+  each rejected statement family covered by tests. `query_table` remains
+  supported.
 - Do not describe SELECT-family inspection as semantic read-only enforcement or
   as safe handling of attacker-controlled SQL. The supported deployment trusts
   the local `stdio` MCP host/tool caller under the operator's OS account; an

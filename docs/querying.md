@@ -114,18 +114,11 @@ table and is usually the easiest way to request a weekly or monthly overview.
 ```
 
 `format` can be `json`, `csv`, or `summary`. `health_query` accepts exactly one
-DuckDB SELECT-family analytical statement. The supported contract includes
-ordinary `SELECT`, joins, multiple CTEs, nested, scalar, and correlated
-subqueries, `UNION`, `UNION ALL`, `INTERSECT`, `EXCEPT`, FROM-first syntax,
-`DESCRIBE SELECT`, `SUMMARIZE`, `SHOW`, `TABLE`, and `VALUES`. Comments,
-whitespace, and a trailing semicolon are allowed. Top-level mutation,
-configuration, file-copy, attachment, or extension-management statements and
-multiple statements are rejected.
-
-Calls to `enable_logging`, `disable_logging`, `truncate_duckdb_logs`,
-`write_log`, dynamic-SQL `query(...)`, and `json_execute_serialized_sql(...)`
-are also rejected wherever they appear. `query_table(...)` remains available. These are query guardrails for a
-trusted local MCP host/tool caller, not a guarantee that arbitrary
+DuckDB SELECT-family analytical statement; comments, whitespace, and a trailing
+semicolon are allowed. The supported forms and the blocked logging and
+dynamic-SQL functions are enumerated in
+[architecture.md](architecture.md#query-guardrails). These are query guardrails
+for a trusted local MCP host/tool caller, not a guarantee that arbitrary
 attacker-controlled SQL is safe; deployments accepting untrusted tool arguments
 need process or OS isolation.
 

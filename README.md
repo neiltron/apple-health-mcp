@@ -68,14 +68,10 @@ Start with `health_schema`; table names depend on the files in your export.
 See [Querying Apple Health data](https://github.com/neiltron/apple-health-mcp/blob/main/docs/querying.md)
 for the data model and working examples.
 
-`health_query` accepts exactly one DuckDB SELECT-family analytical statement.
-The supported contract includes ordinary `SELECT`, joins, multiple CTEs,
-nested, scalar, and correlated subqueries, `UNION`, `UNION ALL`, `INTERSECT`,
-`EXCEPT`, FROM-first syntax, `DESCRIBE SELECT`, `SUMMARIZE`, `SHOW`, `TABLE`, and
-`VALUES`. It rejects top-level mutation/configuration forms and calls to
-`enable_logging`, `disable_logging`, `truncate_duckdb_logs`, `write_log`,
-dynamic-SQL `query(...)`, or `json_execute_serialized_sql(...)`;
-`query_table(...)` remains available.
+`health_query` accepts exactly one DuckDB SELECT-family analytical statement
+and rejects mutation, configuration, logging, and dynamic-SQL operations. The
+supported forms and blocked functions are enumerated under
+[Query guardrails](https://github.com/neiltron/apple-health-mcp/blob/main/docs/architecture.md#query-guardrails).
 
 ## Local trust and query guardrails
 
