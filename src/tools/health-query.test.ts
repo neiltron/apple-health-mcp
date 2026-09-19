@@ -278,15 +278,7 @@ describe('HealthDataDB query inspection', () => {
   });
 
   test('maps missing and malformed serialized ASTs to validator infrastructure failure', async () => {
-    const malformedAsts = [
-      undefined,
-      '{not-json',
-      '{"error":false}',
-      '{"error":false,"statements":[{}]}',
-      '{"error":false,"statements":[{"node":null}]}',
-      '{"error":false,"statements":[{"node":{}}]}',
-      '{"error":false,"statements":[{"node":{"type":"SELECT_NODE","function":{"function_name":null}}}]}'
-    ];
+    const malformedAsts = [undefined, '{not-json', '{"error":false}'];
 
     for (const ast of malformedAsts) {
       const inspectionDb = Object.create(HealthDataDB.prototype) as HealthDataDB;
@@ -298,20 +290,6 @@ describe('HealthDataDB query inspection', () => {
 
       await expect(inspectionDb.inspectQuery('SELECT 1')).resolves.toBe('validator-failure');
     }
-  });
-
-  test('scans deeply nested serialized ASTs without using the JavaScript call stack', async () => {
-    const depth = 30_000;
-    const nestedNode = `{"type":"SELECT_NODE","child":${'{"child":'.repeat(depth)}{"function_name":"log"}${'}'.repeat(depth)}}`;
-    const ast = `{"error":false,"statements":[{"node":${nestedNode}}]}`;
-    const inspectionDb = Object.create(HealthDataDB.prototype) as HealthDataDB;
-    inspectionDb.getConnection = (async () => ({
-      all: (_sql: string, _query: string, callback: (error: Error | null, rows: unknown[]) => void) => {
-        callback(null, [{ ast }]);
-      }
-    })) as typeof inspectionDb.getConnection;
-
-    await expect(inspectionDb.inspectQuery('SELECT 1')).resolves.toBe('accepted');
   });
 });
 

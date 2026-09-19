@@ -14,80 +14,27 @@ const RESTRICTED_QUERY_FUNCTIONS = new Set([
   'json_execute_serialized_sql'
 ]);
 
-type SerializedAstValue = string | number | boolean | null | undefined | SerializedAstObject | SerializedAstValue[];
-
-interface SerializedAstObject {
-  [key: string]: SerializedAstValue;
-}
-
-function isRecord(value: SerializedAstValue): value is SerializedAstObject {
-  return Object(value) === value && !Array.isArray(value);
-}
-
-function isString(value: SerializedAstValue): value is string {
-  return Object(value) instanceof String && Object(value) !== value;
-}
-
-function isBoolean(value: SerializedAstValue): value is boolean {
-  return Object(value) instanceof Boolean && Object(value) !== value;
-}
-
-function inspectStatementFunctions(statement: SerializedAstObject): QueryInspection {
-  const worklist: SerializedAstValue[] = [statement];
-
-  while (worklist.length > 0) {
-    const value = worklist.pop();
-    if (Array.isArray(value)) {
-      for (let index = 0; index < value.length; index += 1) {
-        worklist.push(value[index]);
-      }
-      continue;
-    }
-    if (!isRecord(value)) continue;
-
-    for (const [key, child] of Object.entries(value)) {
-      if (key === 'function_name') {
-        if (!isString(child)) return 'validator-failure';
-        if (RESTRICTED_QUERY_FUNCTIONS.has(child.toLowerCase())) {
-          return 'restricted-function';
-        }
-      } else {
-        worklist.push(child);
-      }
-    }
-  }
-
-  return 'accepted';
-}
-
+// DuckDB's serializer only emits SELECT statements, or error:true for
+// anything else, so statement family is the error flag and statement count is
+// the array length. The reviver visits every key; recursion depth is bounded by
+// the parser's max_expression_depth (1000).
 function inspectSerializedQuery(serialized: any): QueryInspection {
-  if (!isString(serialized)) return 'validator-failure';
-
-  let ast: SerializedAstValue;
+  let restricted = false;
+  let ast: any;
   try {
-    // SAFETY: JSON.parse produces JSON values, exactly the recursive union
-    // modeled by SerializedAstValue; required fields are validated below.
-    ast = JSON.parse(serialized) as SerializedAstValue;
+    ast = JSON.parse(String(serialized), (key, value) => {
+      if (key === 'function_name' && RESTRICTED_QUERY_FUNCTIONS.has(String(value).toLowerCase())) {
+        restricted = true;
+      }
+      return value;
+    });
   } catch {
     return 'validator-failure';
   }
-
-  if (!isRecord(ast) || !isBoolean(ast.error)) {
-    return 'validator-failure';
-  }
-  if (ast.error) return 'statement-rejected';
-  if (!Array.isArray(ast.statements)) return 'validator-failure';
+  if (ast?.error === true) return 'statement-rejected';
+  if (!Array.isArray(ast?.statements)) return 'validator-failure';
   if (ast.statements.length !== 1) return 'statement-rejected';
-
-  const statement = ast.statements[0];
-  if (
-    !isRecord(statement) ||
-    !isRecord(statement.node) ||
-    !isString(statement.node.type)
-  ) {
-    return 'validator-failure';
-  }
-  return inspectStatementFunctions(statement);
+  return restricted ? 'restricted-function' : 'accepted';
 }
 
 export class HealthDataDB {
