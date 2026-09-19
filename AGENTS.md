@@ -41,8 +41,18 @@ normalized data model.
 
 - Never write logs or diagnostics to stdout while the MCP transport is active;
   stdout is reserved for protocol messages.
-- Keep `health_query` read-only. Any change to query validation needs tests for
-  accepted `SELECT` statements and rejected mutation statements.
+- Preserve the `health_query` query checks. Accept one DuckDB analytical
+  statement. Reject logging functions, `query`, and
+  `json_execute_serialized_sql` before loading, cache lookup, or execution.
+  Keep joins, CTEs, subqueries, set operations, FROM-first syntax,
+  `DESCRIBE SELECT`, `SUMMARIZE`, `SHOW`, `TABLE`, and `VALUES` covered by
+  acceptance tests. Keep data changes, setting changes, and multiple statements
+  covered by rejection tests. `query_table` remains supported.
+- Do not call the query checks a security boundary or an OS sandbox. Untrusted
+  SQL requires process or OS isolation.
+- Keep DuckDB file, external-access, configuration-lock, memory, and no-spill
+  settings enabled. `allowed_directories` permits reads and writes inside
+  `HEALTH_DATA_DIR`.
 - Preserve lazy loading unless a deliberate architecture change replaces it.
 - Category labels such as sleep stages live in `valueText`; their numeric
   `value` is `NULL`.

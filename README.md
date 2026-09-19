@@ -5,7 +5,7 @@
 
 Query Apple Health data from an MCP client using SQL and DuckDB. The server runs
 locally, reads CSV exports on demand, and provides tools for schema discovery,
-read-only queries, and health summaries.
+analytical queries, and health summaries.
 
 ## Requirements
 
@@ -61,12 +61,29 @@ sent to that client's configured model provider.
 | Tool | Purpose |
 | --- | --- |
 | `health_schema` | Discover table names, columns, units, and sample rows |
-| `health_query` | Run a read-only `SELECT` query with JSON, CSV, or summary output |
+| `health_query` | Run one DuckDB SELECT-family analytical statement with JSON, CSV, or summary output |
 | `health_report` | Generate a weekly, monthly, or custom health summary |
 
 Start with `health_schema`; table names depend on the files in your export.
 See [Querying Apple Health data](https://github.com/neiltron/apple-health-mcp/blob/main/docs/querying.md)
 for the data model and working examples.
+
+`health_query` accepts one DuckDB analytical statement. It supports joins,
+CTEs, subqueries, set operations, window functions, and other DuckDB analysis
+features. It rejects statements that change data or database settings. It also
+rejects logging functions and functions that execute dynamic or serialized SQL.
+
+## Query safeguards
+
+The server limits DuckDB file access to `HEALTH_DATA_DIR`. It also disables
+network access and temporary disk storage, and it locks the database settings.
+The data directory stays readable and writable so the importer can read CSV
+files.
+
+These controls reduce accidental side effects from generated SQL. They do not
+isolate the process. Run the server through a local `stdio` MCP client. Do not
+expose it to an untrusted network client. Use process or OS isolation if the
+server must accept untrusted SQL.
 
 ## History and memory
 

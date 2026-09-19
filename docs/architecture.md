@@ -72,11 +72,39 @@ The conformance suite in `src/test-helpers/conformance.ts` asserts this
 contract end-to-end for every importer; a new format adopts it by supplying
 fixtures.
 
-### Query safety and caching
+### Query safeguards
 
-`health_query` requires a statement containing `SELECT` and rejects a small
-blocklist of mutation keywords. This is a pragmatic guard, not a complete SQL
-parser or security boundary.
+`health_query` has two control layers.
+
+At startup, `setupDatabase` disables temporary disk storage. It limits file
+access to `HEALTH_DATA_DIR`, disables external access, and locks these settings.
+Reads and writes outside the data directory fail. URL access, `ATTACH`, and
+extension installation also fail. The data directory stays readable and
+writable so the importer can read CSV files. DuckDB can still load a bundled
+extension. The query check rejects top-level `COPY` and `LOAD` statements.
+
+Before execution, the server sends the SQL to DuckDB's `json_serialize_sql`
+parser as a bound `VARCHAR`. The server accepts one analytical statement. The
+supported forms include `SELECT`, joins, CTEs, subqueries, set operations,
+FROM-first syntax, `DESCRIBE SELECT`, `SUMMARIZE`, `SHOW`, `TABLE`, and `VALUES`.
+Comments and a trailing semicolon are valid. The server rejects invalid or
+multiple statements. It also rejects top-level DDL, DML, `COPY`, `ATTACH`,
+`INSTALL`, `LOAD`, `SET`, `RESET`, and `PRAGMA` statements.
+
+The server also checks function names in the parsed syntax tree. It rejects
+`enable_logging`, `disable_logging`, `truncate_duckdb_logs`, and `write_log`.
+It rejects `query` and `json_execute_serialized_sql` because these functions can
+hide a restricted operation. `query_table` and mathematical `log` remain
+available. A parser or inspection failure stops the query.
+
+These controls reduce accidental side effects from generated SQL. They do not
+isolate the process. The supported configuration is a local `stdio` MCP server.
+Do not expose it to an untrusted network client. Use process or OS isolation if
+the server must accept untrusted SQL.
+
+Remaining risks include expensive queries without a timeout or CPU limit,
+future DuckDB functions with side effects, symbolic links in the data directory,
+engine defects, and writes to the data directory.
 
 Query results use an in-memory bounded cache. Aggregate queries receive a
 ten-minute TTL. For non-aggregate queries, requests involving `CURRENT_DATE` or
@@ -128,6 +156,8 @@ MCP client and are subject to that client's data handling.
 - One export format per data directory.
 - The database is in memory and is rebuilt per process; incremental or
   persistent import is planned future work.
-- Query validation and lazy-load table detection are string-based.
+- Query inspection accepts one DuckDB SELECT-family analytical statement and
+  blocks five selected operational functions; lazy-load table detection is
+  still string-based.
 - The implementation exposes tools only—no resources, prompts, HTTP transport,
   or hosted service.

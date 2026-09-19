@@ -65,7 +65,8 @@ export const PROMPTS: PromptDefinition[] = [
 
 const SHARED_RULES = `Ground rules for querying this data:
 - Call health_schema first to see which tables this export actually contains.
-- Only SELECT queries are accepted by health_query.
+- health_query accepts one DuckDB analytical query. You can use joins, CTEs, subqueries, set operations, and window functions.
+- Do not use logging functions or functions that execute dynamic or serialized SQL.
 - Check the unit column before combining values; units vary by source device.
 - Multiple devices can record overlapping rows, so per-source breakdowns are safer than naive sums.
 - Category tables (e.g. sleep stages) keep their label in valueText; their numeric value is NULL.

@@ -30,7 +30,7 @@ export class HealthQueryTool {
     const { query, format = 'json' } = args;
 
     // Validate query
-    this.validateQuery(query);
+    await this.validateQuery(query);
 
     await this.loader.ensureTablesForQuery(query);
 
@@ -55,25 +55,21 @@ export class HealthQueryTool {
     return this.formatResult(result, format);
   }
   
-  private validateQuery(query: string): void {
-    const forbidden = ['drop', 'delete', 'truncate', 'insert', 'update', 'create table', 'alter'];
-    const queryLower = query.toLowerCase();
+  // Complete parser-backed statement inspection before lazy loading, cache
+  // lookup, or execution. Statement shape, restricted-function policy, and a
+  // validator malfunction are distinct fail-closed outcomes.
+  private async validateQuery(query: string): Promise<void> {
+    const inspection = await this.db.inspectQuery(query);
 
-    for (const keyword of forbidden) {
-      if (queryLower.includes(keyword)) {
-        throw new Error(`Query contains forbidden keyword: ${keyword}`);
-      }
-    }
-
-    // Configuration statements could re-enable disk spill or change limits the
-    // server set at startup. Word boundaries keep OFFSET and column names legal.
-    const configStatement = /\b(set|reset|pragma)\b/i.exec(query);
-    if (configStatement) {
-      throw new Error(`Query contains forbidden keyword: ${configStatement[1].toLowerCase()}`);
-    }
-
-    if (!queryLower.includes('select')) {
-      throw new Error('Only SELECT queries are allowed');
+    switch (inspection.outcome) {
+      case 'accepted':
+        return;
+      case 'statement-rejected':
+        throw new Error('Only one DuckDB SELECT-family statement is allowed');
+      case 'restricted-function':
+        throw new Error('Query uses a restricted operational function');
+      case 'validator-failure':
+        throw new Error('Query validation is unavailable');
     }
   }
   

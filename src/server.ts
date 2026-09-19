@@ -38,7 +38,7 @@ const healthQueryInputSchema = {
   properties: {
     query: {
       type: "string",
-      description: "SQL SELECT query to execute"
+      description: "One DuckDB analytical query. Joins, CTEs, subqueries, set operations, and window functions are supported."
     },
     format: {
       type: "string",
@@ -108,7 +108,7 @@ const schemaTool = new HealthSchemaTool(db, catalog, loader);
 // Create MCP server
 const server = new Server({
   name: "apple-health-mcp",
-  version: "1.4.2",
+  version: "1.4.3",
 }, {
   capabilities: {
     tools: {},
@@ -122,7 +122,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [
     {
       name: "health_query",
-      description: "Execute SQL queries on Apple Health data. Supports SELECT queries only.",
+      description: "Run one analytical query on Apple Health data.",
       inputSchema: healthQueryInputSchema
     },
     {

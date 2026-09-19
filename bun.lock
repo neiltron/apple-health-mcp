@@ -6,7 +6,7 @@
       "name": "apple-health-mcp",
       "dependencies": {
         "@modelcontextprotocol/sdk": "^1.30.0",
-        "duckdb": "^1.4.4",
+        "duckdb": "1.4.4",
       },
       "devDependencies": {
         "@oxlint/plugins": "1.79.0",

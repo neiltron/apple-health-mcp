@@ -1,6 +1,7 @@
 import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { HealthDataDB } from '../../db/database';
+import { escapeSqlLiteral } from '../../utils';
 import type { DetectedTable, DetectionResult, FormatImporter, TableKind } from '../types';
 
 // Kind comes from the filename alone; detection reads no rows. Families the
@@ -69,7 +70,7 @@ export class SimpleCsvImporter implements FormatImporter {
   private csvSource(filePath: string): string {
     // Paths are not user queries, but a directory name like "Neil's Health"
     // contains a quote that would end the SQL literal early.
-    const escapedPath = filePath.replace(/'/g, "''");
+    const escapedPath = escapeSqlLiteral(filePath);
     // sample_size = -1 sniffs column types from the whole file, not the first
     // ~20k rows. Metadata columns like sourceVersion look numeric for months
     // ("10.5") and then stop ("11.0.1"); a sampled DOUBLE guess turns every
