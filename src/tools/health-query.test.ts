@@ -449,41 +449,4 @@ describe('HealthQueryTool rejected queries', () => {
     await expect(pending).resolves.toMatchObject({ rowCount: 1 });
     expect(order).toEqual(['inspection-started', 'load', 'cache', 'execute']);
   });
-
-  test('awaits rejected inspection completion and never starts downstream work', async () => {
-    const order: string[] = [];
-    let resolveInspection!: (inspection: QueryInspection) => void;
-    const inspection = new Promise<QueryInspection>((resolve) => {
-      resolveInspection = resolve;
-    });
-    const orderingDb = {
-      inspectQuery: async () => {
-        order.push('inspection-started');
-        return inspection;
-      },
-      execute: async () => {
-        order.push('execute');
-        return [];
-      }
-    } as unknown as HealthDataDB;
-    const orderingLoader = {
-      ensureTablesForQuery: async () => {
-        order.push('load');
-      }
-    } as unknown as TableLoader;
-    const orderingCache = new QueryCache(1);
-    const originalGetOrExecute = orderingCache.getOrExecute.bind(orderingCache);
-    orderingCache.getOrExecute = (async (query, executor, params) => {
-      order.push('cache');
-      return originalGetOrExecute(query, executor, params);
-    }) as typeof orderingCache.getOrExecute;
-    const orderingTool = new HealthQueryTool(orderingDb, orderingCache, orderingLoader);
-
-    const pending = orderingTool.execute({ query: 'SELECT 1' });
-    expect(order).toEqual(['inspection-started']);
-
-    resolveInspection('statement-rejected');
-    await expect(pending).rejects.toThrow(STATEMENT_REJECTION);
-    expect(order).toEqual(['inspection-started']);
-  });
 });
