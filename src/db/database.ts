@@ -123,33 +123,11 @@ export class HealthDataDB {
   // logging operations and their dynamic-SQL bypass. Query text remains a
   // bound VARCHAR, never interpolated into the validator SQL.
   async inspectQuery(query: string, sessionId?: string): Promise<QueryInspection> {
-    let conn: Connection;
-    try {
-      conn = await this.getConnection(sessionId);
-    } catch {
-      return 'validator-failure';
-    }
-
+    const conn = await this.getConnection(sessionId);
     return new Promise((resolve) => {
-      try {
-        conn.all(
-          'SELECT json_serialize_sql(?::VARCHAR) AS ast',
-          query,
-          (err, result) => {
-            if (err || !Array.isArray(result) || result.length !== 1) {
-              resolve('validator-failure');
-              return;
-            }
-            try {
-              resolve(inspectSerializedQuery(result[0]?.ast));
-            } catch {
-              resolve('validator-failure');
-            }
-          }
-        );
-      } catch {
-        resolve('validator-failure');
-      }
+      conn.all('SELECT json_serialize_sql(?::VARCHAR) AS ast', query, (err, result) => {
+        resolve(err ? 'validator-failure' : inspectSerializedQuery(result[0]?.ast));
+      });
     });
   }
   

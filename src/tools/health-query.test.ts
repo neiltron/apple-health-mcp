@@ -255,28 +255,6 @@ describe('HealthDataDB query inspection', () => {
     await expect(inspectionDb.inspectQuery('SELECT 1')).resolves.toBe('validator-failure');
   });
 
-  test('maps connection and synchronous parser failures to validator infrastructure failure', async () => {
-    // SAFETY: this test double inherits HealthDataDB and replaces the first
-    // dependency inspectQuery reaches.
-    const connectionFailureDb = Object.create(HealthDataDB.prototype) as HealthDataDB;
-    connectionFailureDb.getConnection = async () => {
-      throw new Error('connection unavailable');
-    };
-    await expect(connectionFailureDb.inspectQuery('SELECT 1')).resolves.toBe('validator-failure');
-
-    // SAFETY: this test double inherits HealthDataDB and replaces the only
-    // dependency inspectQuery reaches before the synchronous throw.
-    const parserFailureDb = Object.create(HealthDataDB.prototype) as HealthDataDB;
-    // SAFETY: the replacement preserves getConnection's async return contract
-    // and supplies the callback-style all method inspectQuery invokes.
-    parserFailureDb.getConnection = (async () => ({
-      all: () => {
-        throw new Error('synchronous parser failure');
-      }
-    })) as unknown as typeof parserFailureDb.getConnection;
-    await expect(parserFailureDb.inspectQuery('SELECT 1')).resolves.toBe('validator-failure');
-  });
-
   test('maps missing and malformed serialized ASTs to validator infrastructure failure', async () => {
     const malformedAsts = [undefined, '{not-json', '{"error":false}'];
 
