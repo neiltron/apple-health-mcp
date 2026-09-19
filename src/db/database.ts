@@ -3,11 +3,7 @@ import type { Database, Connection } from 'duckdb';
 import type { HealthDataConfig } from '../types';
 import { escapeSqlLiteral } from '../utils';
 
-export type QueryInspection =
-  | { outcome: 'accepted' }
-  | { outcome: 'statement-rejected' }
-  | { outcome: 'restricted-function' }
-  | { outcome: 'validator-failure' };
+export type QueryInspection = 'accepted' | 'statement-rejected' | 'restricted-function' | 'validator-failure';
 
 const RESTRICTED_QUERY_FUNCTIONS = new Set([
   'enable_logging',
@@ -51,9 +47,9 @@ function inspectStatementFunctions(statement: SerializedAstObject): QueryInspect
 
     for (const [key, child] of Object.entries(value)) {
       if (key === 'function_name') {
-        if (!isString(child)) return { outcome: 'validator-failure' };
+        if (!isString(child)) return 'validator-failure';
         if (RESTRICTED_QUERY_FUNCTIONS.has(child.toLowerCase())) {
-          return { outcome: 'restricted-function' };
+          return 'restricted-function';
         }
       } else {
         worklist.push(child);
@@ -61,11 +57,11 @@ function inspectStatementFunctions(statement: SerializedAstObject): QueryInspect
     }
   }
 
-  return { outcome: 'accepted' };
+  return 'accepted';
 }
 
 function inspectSerializedQuery(serialized: any): QueryInspection {
-  if (!isString(serialized)) return { outcome: 'validator-failure' };
+  if (!isString(serialized)) return 'validator-failure';
 
   let ast: SerializedAstValue;
   try {
@@ -73,15 +69,15 @@ function inspectSerializedQuery(serialized: any): QueryInspection {
     // modeled by SerializedAstValue; required fields are validated below.
     ast = JSON.parse(serialized) as SerializedAstValue;
   } catch {
-    return { outcome: 'validator-failure' };
+    return 'validator-failure';
   }
 
   if (!isRecord(ast) || !isBoolean(ast.error)) {
-    return { outcome: 'validator-failure' };
+    return 'validator-failure';
   }
-  if (ast.error) return { outcome: 'statement-rejected' };
-  if (!Array.isArray(ast.statements)) return { outcome: 'validator-failure' };
-  if (ast.statements.length !== 1) return { outcome: 'statement-rejected' };
+  if (ast.error) return 'statement-rejected';
+  if (!Array.isArray(ast.statements)) return 'validator-failure';
+  if (ast.statements.length !== 1) return 'statement-rejected';
 
   const statement = ast.statements[0];
   if (
@@ -89,7 +85,7 @@ function inspectSerializedQuery(serialized: any): QueryInspection {
     !isRecord(statement.node) ||
     !isString(statement.node.type)
   ) {
-    return { outcome: 'validator-failure' };
+    return 'validator-failure';
   }
   return inspectStatementFunctions(statement);
 }
@@ -184,7 +180,7 @@ export class HealthDataDB {
     try {
       conn = await this.getConnection(sessionId);
     } catch {
-      return { outcome: 'validator-failure' };
+      return 'validator-failure';
     }
 
     return new Promise((resolve) => {
@@ -194,18 +190,18 @@ export class HealthDataDB {
           query,
           (err, result) => {
             if (err || !Array.isArray(result) || result.length !== 1) {
-              resolve({ outcome: 'validator-failure' });
+              resolve('validator-failure');
               return;
             }
             try {
               resolve(inspectSerializedQuery(result[0]?.ast));
             } catch {
-              resolve({ outcome: 'validator-failure' });
+              resolve('validator-failure');
             }
           }
         );
       } catch {
-        resolve({ outcome: 'validator-failure' });
+        resolve('validator-failure');
       }
     });
   }

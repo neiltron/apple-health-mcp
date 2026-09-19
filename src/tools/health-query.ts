@@ -61,7 +61,7 @@ export class HealthQueryTool {
   private async validateQuery(query: string): Promise<void> {
     const inspection = await this.db.inspectQuery(query);
 
-    switch (inspection.outcome) {
+    switch (inspection) {
       case 'accepted':
         return;
       case 'statement-rejected':

@@ -235,19 +235,13 @@ describe('HealthDataDB query inspection', () => {
 
   for (const [label, query] of restrictedQueries) {
     test(`finds ${label}`, async () => {
-      await expect(db.inspectQuery(query)).resolves.toEqual({
-        outcome: 'restricted-function'
-      });
+      await expect(db.inspectQuery(query)).resolves.toBe('restricted-function');
     });
   }
 
   test('distinguishes accepted and statement-shape outcomes', async () => {
-    await expect(db.inspectQuery('SELECT 1')).resolves.toEqual({
-      outcome: 'accepted'
-    });
-    await expect(db.inspectQuery('SELECT 1; SELECT 2')).resolves.toEqual({
-      outcome: 'statement-rejected'
-    });
+    await expect(db.inspectQuery('SELECT 1')).resolves.toBe('accepted');
+    await expect(db.inspectQuery('SELECT 1; SELECT 2')).resolves.toBe('statement-rejected');
   });
 
   test('maps parser callback errors to validator infrastructure failure', async () => {
@@ -258,9 +252,7 @@ describe('HealthDataDB query inspection', () => {
       }
     })) as typeof inspectionDb.getConnection;
 
-    await expect(inspectionDb.inspectQuery('SELECT 1')).resolves.toEqual({
-      outcome: 'validator-failure'
-    });
+    await expect(inspectionDb.inspectQuery('SELECT 1')).resolves.toBe('validator-failure');
   });
 
   test('maps connection and synchronous parser failures to validator infrastructure failure', async () => {
@@ -270,9 +262,7 @@ describe('HealthDataDB query inspection', () => {
     connectionFailureDb.getConnection = async () => {
       throw new Error('connection unavailable');
     };
-    await expect(connectionFailureDb.inspectQuery('SELECT 1')).resolves.toEqual({
-      outcome: 'validator-failure'
-    });
+    await expect(connectionFailureDb.inspectQuery('SELECT 1')).resolves.toBe('validator-failure');
 
     // SAFETY: this test double inherits HealthDataDB and replaces the only
     // dependency inspectQuery reaches before the synchronous throw.
@@ -284,9 +274,7 @@ describe('HealthDataDB query inspection', () => {
         throw new Error('synchronous parser failure');
       }
     })) as unknown as typeof parserFailureDb.getConnection;
-    await expect(parserFailureDb.inspectQuery('SELECT 1')).resolves.toEqual({
-      outcome: 'validator-failure'
-    });
+    await expect(parserFailureDb.inspectQuery('SELECT 1')).resolves.toBe('validator-failure');
   });
 
   test('maps missing and malformed serialized ASTs to validator infrastructure failure', async () => {
@@ -308,9 +296,7 @@ describe('HealthDataDB query inspection', () => {
         }
       })) as typeof inspectionDb.getConnection;
 
-      await expect(inspectionDb.inspectQuery('SELECT 1')).resolves.toEqual({
-        outcome: 'validator-failure'
-      });
+      await expect(inspectionDb.inspectQuery('SELECT 1')).resolves.toBe('validator-failure');
     }
   });
 
@@ -325,9 +311,7 @@ describe('HealthDataDB query inspection', () => {
       }
     })) as typeof inspectionDb.getConnection;
 
-    await expect(inspectionDb.inspectQuery('SELECT 1')).resolves.toEqual({
-      outcome: 'accepted'
-    });
+    await expect(inspectionDb.inspectQuery('SELECT 1')).resolves.toBe('accepted');
   });
 });
 
@@ -517,7 +501,7 @@ describe('HealthQueryTool rejected queries', () => {
     const originalEnsureTables = loader.ensureTablesForQuery.bind(loader);
     const originalGetOrExecute = cache.getOrExecute.bind(cache);
     const originalExecute = db.execute.bind(db);
-    db.inspectQuery = async () => ({ outcome: 'validator-failure' });
+    db.inspectQuery = async () => ('validator-failure');
     loader.ensureTablesForQuery = (async () => {
       downstreamCalls.push('load');
     }) as typeof loader.ensureTablesForQuery;
@@ -573,7 +557,7 @@ describe('HealthQueryTool rejected queries', () => {
     const pending = orderingTool.execute({ query: 'SELECT 1 AS validation_order_control' });
     expect(order).toEqual(['inspection-started']);
 
-    resolveInspection({ outcome: 'accepted' });
+    resolveInspection('accepted');
     await expect(pending).resolves.toMatchObject({ rowCount: 1 });
     expect(order).toEqual(['inspection-started', 'load', 'cache', 'execute']);
   });
@@ -610,7 +594,7 @@ describe('HealthQueryTool rejected queries', () => {
     const pending = orderingTool.execute({ query: 'SELECT 1' });
     expect(order).toEqual(['inspection-started']);
 
-    resolveInspection({ outcome: 'statement-rejected' });
+    resolveInspection('statement-rejected');
     await expect(pending).rejects.toThrow(STATEMENT_REJECTION);
     expect(order).toEqual(['inspection-started']);
   });
