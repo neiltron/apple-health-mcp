@@ -44,8 +44,9 @@ normalized data model.
 - Preserve the `health_query` guardrail contract: accept exactly one DuckDB
   SELECT-family analytical statement as classified by DuckDB's parser, then
   reject exact calls to `enable_logging`, `disable_logging`,
-  `truncate_duckdb_logs`, `write_log`, and `query` before lazy loading, cache
-  lookup, or execution. Keep joins, multiple CTEs, nested/scalar/correlated
+  `truncate_duckdb_logs`, `write_log`, `query`, and
+  `json_execute_serialized_sql` before lazy loading, cache lookup, or
+  execution. Keep joins, multiple CTEs, nested/scalar/correlated
   subqueries, `UNION`, `UNION ALL`, `INTERSECT`, `EXCEPT`, FROM-first syntax,
   `DESCRIBE SELECT`, `SUMMARIZE`, `SHOW`, `TABLE`, and `VALUES` covered by
   acceptance tests; keep top-level mutation/configuration forms and multiple

@@ -123,8 +123,8 @@ configuration, file-copy, attachment, or extension-management statements and
 multiple statements are rejected.
 
 Calls to `enable_logging`, `disable_logging`, `truncate_duckdb_logs`,
-`write_log`, and dynamic-SQL `query(...)` are also rejected wherever they
-appear. `query_table(...)` remains available. These are query guardrails for a
+`write_log`, dynamic-SQL `query(...)`, and `json_execute_serialized_sql(...)`
+are also rejected wherever they appear. `query_table(...)` remains available. These are query guardrails for a
 trusted local MCP host/tool caller, not a guarantee that arbitrary
 attacker-controlled SQL is safe; deployments accepting untrusted tool arguments
 need process or OS isolation.

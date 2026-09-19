@@ -73,8 +73,9 @@ The supported contract includes ordinary `SELECT`, joins, multiple CTEs,
 nested, scalar, and correlated subqueries, `UNION`, `UNION ALL`, `INTERSECT`,
 `EXCEPT`, FROM-first syntax, `DESCRIBE SELECT`, `SUMMARIZE`, `SHOW`, `TABLE`, and
 `VALUES`. It rejects top-level mutation/configuration forms and calls to
-`enable_logging`, `disable_logging`, `truncate_duckdb_logs`, `write_log`, or
-dynamic-SQL `query(...)`; `query_table(...)` remains available.
+`enable_logging`, `disable_logging`, `truncate_duckdb_logs`, `write_log`,
+dynamic-SQL `query(...)`, or `json_execute_serialized_sql(...)`;
+`query_table(...)` remains available.
 
 ## Local trust and query guardrails
 

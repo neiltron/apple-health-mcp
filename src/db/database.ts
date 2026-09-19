@@ -14,7 +14,8 @@ const RESTRICTED_QUERY_FUNCTIONS = new Set([
   'disable_logging',
   'truncate_duckdb_logs',
   'write_log',
-  'query'
+  'query',
+  'json_execute_serialized_sql'
 ]);
 
 type SerializedAstValue = string | number | boolean | null | undefined | SerializedAstObject | SerializedAstValue[];

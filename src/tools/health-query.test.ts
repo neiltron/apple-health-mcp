@@ -222,6 +222,10 @@ describe('HealthDataDB query inspection', () => {
       'dynamic SQL containing enable_logging',
       "SELECT * FROM query('SELECT * FROM enable_logging(storage := ''stdout'')')"
     ],
+    [
+      'serialized SQL containing enable_logging',
+      "SELECT * FROM json_execute_serialized_sql(json_serialize_sql('SELECT * FROM enable_logging(storage := ''stdout'')'))"
+    ],
     ['uppercase spelling', "SELECT WRITE_LOG('marker')"],
     ['mixed-case spelling', "SELECT WrItE_LoG('marker')"],
     ['quoted spelling', `SELECT "write_log"('marker')`],

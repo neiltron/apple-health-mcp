@@ -101,10 +101,11 @@ enumerated compatibility contract, not a promise that every possible
 SELECT-family form is supported.
 
 The same inspection walks DuckDB's serialized syntax tree and rejects exact,
-case-normalized calls to five operations: `enable_logging`, `disable_logging`,
-`truncate_duckdb_logs`, `write_log`, and `query`. The first four control or emit
-DuckDB logs; `query(...)` is blocked because dynamic SQL could conceal those
-calls. `query_table(...)`, mathematical `log(...)`, and restricted words in
+case-normalized calls to six operations: `enable_logging`, `disable_logging`,
+`truncate_duckdb_logs`, `write_log`, `query`, and
+`json_execute_serialized_sql`. The first four control or emit DuckDB logs;
+`query(...)` and `json_execute_serialized_sql(...)` are blocked because dynamic
+or serialized SQL could conceal those calls. `query_table(...)`, mathematical `log(...)`, and restricted words in
 literals, comments, aliases, or identifiers remain available. Parser rejection,
 restricted-operation rejection, and inspection infrastructure failure are
 separate fail-closed outcomes.
@@ -174,7 +175,7 @@ MCP client and are subject to that client's data handling.
 - The database is in memory and is rebuilt per process; incremental or
   persistent import is planned future work.
 - Query inspection accepts one DuckDB SELECT-family analytical statement and
-  blocks five selected operational functions; lazy-load table detection is
+  blocks six selected operational functions; lazy-load table detection is
   still string-based.
 - The implementation exposes tools only—no resources, prompts, HTTP transport,
   or hosted service.

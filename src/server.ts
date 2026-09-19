@@ -122,7 +122,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [
     {
       name: "health_query",
-      description: "Run one DuckDB SELECT-family analytical statement on Apple Health data. Calls to enable_logging, disable_logging, truncate_duckdb_logs, write_log, and query are blocked; query_table remains available. These guardrails assume a trusted local caller and do not sandbox attacker-controlled SQL.",
+      description: "Run one DuckDB SELECT-family analytical statement on Apple Health data. Calls to enable_logging, disable_logging, truncate_duckdb_logs, write_log, query, and json_execute_serialized_sql are blocked; query_table remains available. These guardrails assume a trusted local caller and do not sandbox attacker-controlled SQL.",
       inputSchema: healthQueryInputSchema
     },
     {
