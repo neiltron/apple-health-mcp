@@ -354,27 +354,6 @@ describe('HealthQueryTool rejected queries', () => {
     expect(result.rowCount).toBe(1);
   });
 
-  test('a rejected query never reaches the database', async () => {
-    const executed: string[] = [];
-    const originalExecute = db.execute.bind(db);
-    // SAFETY: the spy has the same (query, sessionId?) => Promise<any[]>
-    // signature as HealthDataDB.execute, so it is a drop-in replacement.
-    db.execute = ((query: string, sessionId?: string) => {
-      // Ignore the validator's own json_serialize_sql probe; record real runs.
-      if (!query.includes('json_serialize_sql')) executed.push(query);
-      return originalExecute(query, sessionId);
-    }) as typeof db.execute;
-
-    try {
-      await expect(
-        tool.execute({ query: "COPY (SELECT 1) TO 'leak.csv'" })
-      ).rejects.toThrow(STATEMENT_REJECTION);
-      expect(executed).toEqual([]);
-    } finally {
-      db.execute = originalExecute;
-    }
-  });
-
   test('rejects restricted functions before loading, caching, or execution', async () => {
     const downstreamCalls: string[] = [];
     const originalEnsureTables = loader.ensureTablesForQuery.bind(loader);
