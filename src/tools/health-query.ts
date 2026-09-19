@@ -15,6 +15,13 @@ function escapeCsvField(value: any): string {
   return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
+const REJECTION_MESSAGES = {
+  accepted: undefined,
+  'statement-rejected': 'Only one DuckDB SELECT-family statement is allowed',
+  'restricted-function': 'Query uses a restricted operational function',
+  'validator-failure': 'Query validation is unavailable'
+};
+
 export class HealthQueryTool {
   private db: HealthDataDB;
   private cache: QueryCache;
@@ -59,18 +66,8 @@ export class HealthQueryTool {
   // lookup, or execution. Statement shape, restricted-function policy, and a
   // validator malfunction are distinct fail-closed outcomes.
   private async validateQuery(query: string): Promise<void> {
-    const inspection = await this.db.inspectQuery(query);
-
-    switch (inspection) {
-      case 'accepted':
-        return;
-      case 'statement-rejected':
-        throw new Error('Only one DuckDB SELECT-family statement is allowed');
-      case 'restricted-function':
-        throw new Error('Query uses a restricted operational function');
-      case 'validator-failure':
-        throw new Error('Query validation is unavailable');
-    }
+    const message = REJECTION_MESSAGES[await this.db.inspectQuery(query)];
+    if (message) throw new Error(message);
   }
   
   private formatResult(result: QueryResult, format: OutputFormat): any {
