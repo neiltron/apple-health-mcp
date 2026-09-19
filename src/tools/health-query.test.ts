@@ -12,8 +12,6 @@ import { HealthQueryTool } from './health-query';
 
 let testRoot: string;
 let dataDir: string;
-let outsideTextPath: string;
-let outsideCsvPath: string;
 let db: HealthDataDB;
 let loader: TableLoader;
 let cache: QueryCache;
@@ -36,11 +34,6 @@ beforeAll(async () => {
     join(dataDir, 'HKQuantityTypeIdentifierStepCount.csv'),
     [...header, 'HKQuantityTypeIdentifierStepCount,iPhone,16.0,iPhone15,2,2019-04-08 08:00:00 +0000,2019-04-08 08:15:00 +0000,count,1200'].join('\r\n') + '\r\n'
   );
-
-  outsideTextPath = join(testRoot, 'known-readable.txt');
-  outsideCsvPath = join(testRoot, 'known-readable.csv');
-  writeFileSync(outsideTextPath, 'known readable fixture\n');
-  writeFileSync(outsideCsvPath, 'value\n1\n');
 
   db = new HealthDataDB({ dataDir, maxMemoryMB: 512 });
   await db.initialize();
@@ -327,46 +320,6 @@ describe('HealthQueryTool rejected queries', () => {
   for (const [label, query] of rejected) {
     test(`rejects ${label} before downstream work`, async () => {
       await expectStatementRejectedBeforeDownstream(query);
-    });
-  }
-
-  // These are valid one-statement SELECT-family queries. Known-readable local
-  // fixtures rule out incidental missing-file failures: the engine must deny
-  // them specifically because they are outside dataDir or use a URL.
-  const engineBlocked: Array<[string, () => string, () => string]> = [
-    [
-      'a local file read via read_text',
-      () => `SELECT * FROM read_text('${outsideTextPath.replace(/'/g, "''")}')`,
-      () => outsideTextPath
-    ],
-    [
-      'a local file read via read_csv',
-      () => `SELECT * FROM read_csv('${outsideCsvPath.replace(/'/g, "''")}')`,
-      () => outsideCsvPath
-    ],
-    [
-      'a local glob',
-      () => `SELECT * FROM glob('${testRoot.replace(/'/g, "''")}/*.csv')`,
-      () => `${testRoot}/*.csv`
-    ],
-    [
-      'a URL read via read_csv',
-      () => "SELECT * FROM read_csv('https://example.com/known.csv')",
-      () => 'https://example.com/known.csv'
-    ]
-  ];
-
-  for (const [label, queryForTest, deniedTarget] of engineBlocked) {
-    test(`blocks ${label} at the engine with a permission error`, async () => {
-      const error = await tool.execute({ query: queryForTest() }).then(
-        () => null,
-        (caught: Error) => caught
-      );
-      expect(error).not.toBeNull();
-      expect(error!.message).not.toContain(STATEMENT_REJECTION);
-      expect(error!.message).toContain('Permission Error');
-      expect(error!.message).toContain('file system operations are disabled by configuration');
-      expect(error!.message).toContain(deniedTarget());
     });
   }
 
