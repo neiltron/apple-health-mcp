@@ -9,6 +9,7 @@ import { defaultRegistry } from '../importers';
 import { TableLoader } from '../db/loader';
 import { QueryCache } from '../core/cache';
 import { HealthQueryTool } from './health-query';
+import { escapeSqlLiteral } from '../utils';
 
 let testRoot: string;
 let dataDir: string;
@@ -325,7 +326,7 @@ describe('HealthQueryTool rejected queries', () => {
 
   test('allows direct in-dataDir COPY but rejects it through the tool without creating a file', async () => {
     const outputPath = join(dataDir, 'copy-layer-control.csv');
-    const escapedOutputPath = outputPath.replace(/'/g, "''");
+    const escapedOutputPath = escapeSqlLiteral(outputPath);
     const copy = `COPY (SELECT 'engine-direct-success' AS marker) TO '${escapedOutputPath}'`;
 
     try {

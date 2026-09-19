@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { HealthDataDB } from './database';
+import { escapeSqlLiteral } from '../utils';
 
 const MAX_MEMORY_MB = 512;
 
@@ -102,7 +103,7 @@ describe('HealthDataDB engine query guardrails', () => {
   }
 
   test('reads a CSV inside the data directory (the loader path stays open)', async () => {
-    const inside = join(boundaryDir, 'inside.csv').replace(/'/g, "''");
+    const inside = escapeSqlLiteral(join(boundaryDir, 'inside.csv'));
     const result = await boundaryDb.execute(
       `SELECT COUNT(*) as count FROM read_csv('${inside}')`
     );
@@ -112,17 +113,17 @@ describe('HealthDataDB engine query guardrails', () => {
   const deniedReads: Array<[string, () => string, () => string]> = [
     [
       'read_text',
-      () => `SELECT * FROM read_text('${outsideTextPath.replace(/'/g, "''")}')`,
+      () => `SELECT * FROM read_text('${escapeSqlLiteral(outsideTextPath)}')`,
       () => outsideTextPath
     ],
     [
       'read_csv',
-      () => `SELECT * FROM read_csv('${outsideCsvPath.replace(/'/g, "''")}')`,
+      () => `SELECT * FROM read_csv('${escapeSqlLiteral(outsideCsvPath)}')`,
       () => outsideCsvPath
     ],
     [
       'glob',
-      () => `SELECT * FROM glob('${boundaryRoot.replace(/'/g, "''")}/*.csv')`,
+      () => `SELECT * FROM glob('${escapeSqlLiteral(boundaryRoot)}/*.csv')`,
       () => `${boundaryRoot}/*.csv`
     ],
     [
@@ -142,14 +143,14 @@ describe('HealthDataDB engine query guardrails', () => {
   test('denies COPY to an absolute path outside dataDir at the engine', async () => {
     const outputPath = join(boundaryRoot, 'outside-copy.csv');
     const error = await permissionErrorFor(
-      `COPY (SELECT 1) TO '${outputPath.replace(/'/g, "''")}'`
+      `COPY (SELECT 1) TO '${escapeSqlLiteral(outputPath)}'`
     );
     expect(error.message).toContain(outputPath);
   });
 
   test('denies ATTACH of a known existing file outside dataDir at the engine', async () => {
     const error = await permissionErrorFor(
-      `ATTACH '${outsideDatabasePath.replace(/'/g, "''")}'`
+      `ATTACH '${escapeSqlLiteral(outsideDatabasePath)}'`
     );
     expect(error.message).toContain(outsideDatabasePath);
   });
@@ -187,7 +188,7 @@ describe('HealthDataDB with a quote in the data directory', () => {
   });
 
   test('still constrains outside file access and locks configuration', async () => {
-    const inside = join(quotedDir, 'inside.csv').replace(/'/g, "''");
+    const inside = escapeSqlLiteral(join(quotedDir, 'inside.csv'));
     const result = await quotedDb.execute(`SELECT COUNT(*) as count FROM read_csv('${inside}')`);
     expect(Number(result[0].count)).toBe(1);
     await expect(quotedDb.execute(`SELECT * FROM read_text('/etc/hosts')`)).rejects.toThrow();
