@@ -8,9 +8,10 @@ Registry entry are both named in `package.json` and `server.json`.
 
 ## Validate changes
 
-Run all three checks before handing off code changes:
+Run all four checks before handing off code changes:
 
 ```bash
+npm run lint
 npm test
 npm run typecheck
 npm run build
