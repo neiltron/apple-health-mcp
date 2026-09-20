@@ -187,4 +187,47 @@ describe('built MCP stdio query guardrails', () => {
       expect(line.toLowerCase()).not.toContain('querylog');
     }
   }, 20_000);
+
+  for (const timezone of ['UTC', 'America/New_York']) {
+    test(`returns CSV text and consistent dates in ${timezone}`, async () => {
+      const child = spawn('node', [serverPath], {
+        cwd: process.cwd(),
+        env: { ...process.env, TZ: timezone, HEALTH_DATA_DIR: dataDir, MAX_MEMORY_MB: '512' },
+        stdio: ['pipe', 'pipe', 'pipe']
+      });
+      child.stderr.resume();
+      const session = protocolSession(child);
+      try {
+        const initialized = await session.request(1, 'initialize', {
+          protocolVersion: '2025-06-18', capabilities: {},
+          clientInfo: { name: 'csv-test', version: '1.0.0' }
+        });
+        expect(initialized.error).toBeUndefined();
+        session.send({ jsonrpc: '2.0', method: 'notifications/initialized', params: {} });
+
+        const query = `SELECT TIMESTAMP '2026-07-27 00:30:00.123' AS sample,
+          DATE '2026-07-27' AS day, 'say "hi",' || chr(10) || 'next' AS label,
+          42::BIGINT AS count, NULL AS missing`;
+        const texts: Record<string, string> = {};
+        let id = 2;
+        for (const format of ['csv', 'json', 'summary']) {
+          const response = await session.request(id++, 'tools/call', {
+            name: 'health_query', arguments: { query, format }
+          });
+          expect(response.error).toBeUndefined();
+          // SAFETY: assert the MCP text content shape before reading it.
+          const result = response.result as { content: Array<{ type: string; text: string }> };
+          expect(result.content).toHaveLength(1);
+          expect(result.content[0].type).toBe('text');
+          texts[format] = result.content[0].text;
+        }
+        expect(texts.csv).toBe('sample,day,label,count,missing\n2026-07-27T00:30:00.123Z,2026-07-27T00:00:00.000Z,"say ""hi"",\nnext",42,');
+        const rows = [['2026-07-27T00:30:00.123Z', '2026-07-27T00:00:00.000Z', 'say "hi",\nnext', '42', null]];
+        expect(JSON.parse(texts.json).rows).toEqual(rows);
+        expect(JSON.parse(texts.summary).sampleRows).toEqual(rows);
+      } finally {
+        await stopChild(child);
+      }
+    }, 20_000);
+  }
 });

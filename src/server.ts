@@ -108,7 +108,7 @@ const schemaTool = new HealthSchemaTool(db, catalog, loader);
 // Create MCP server
 const server = new Server({
   name: "apple-health-mcp",
-  version: "1.4.4",
+  version: "1.4.5",
 }, {
   capabilities: {
     tools: {},
@@ -247,10 +247,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!validated.valid) {
           throw new McpError(ErrorCode.InvalidParams, validated.errorMessage);
         }
+        const result = await queryTool.execute(validated.data);
         return {
           content: [{
             type: "text",
-            text: JSON.stringify(await queryTool.execute(validated.data), jsonReplacer, 2)
+            text: validated.data.format === 'csv' ? result : JSON.stringify(result, jsonReplacer, 2)
           }]
         };
       }

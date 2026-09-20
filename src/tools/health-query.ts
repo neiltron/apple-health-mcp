@@ -11,7 +11,8 @@ function isNumber(value: any): value is number {
 // be quoted, with embedded quotes doubled. Quoting keys off the rendered
 // text, so composite values such as DuckDB lists stay a single field.
 function escapeCsvField(value: any): string {
-  const text = String(value ?? '');
+  // Match JSON date output. Do not convert timestamps to the server's timezone.
+  const text = value instanceof Date ? value.toISOString() : String(value ?? '');
   return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 

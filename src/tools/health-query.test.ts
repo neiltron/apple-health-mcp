@@ -153,6 +153,16 @@ describe('HealthQueryTool accepted queries', () => {
 });
 
 describe('HealthQueryTool output formats', () => {
+  test('formats dates as ISO strings and leaves SQL text unchanged', async () => {
+    const result = await tool.execute({
+      query: `SELECT TIMESTAMP '2026-07-27 00:30:00.123' AS sample,
+        DATE '2026-07-27' AS day, '2026-07-27 00:30:00 -0400' AS source_text,
+        NULL::TIMESTAMP AS missing`,
+      format: 'csv'
+    });
+    expect(result).toBe('sample,day,source_text,missing\n2026-07-27T00:30:00.123Z,2026-07-27T00:00:00.000Z,2026-07-27 00:30:00 -0400,');
+  });
+
   test('separates CSV rows with real newlines and quotes composite values', async () => {
     const result = await tool.execute({
       query: "SELECT 'a,b' AS label, [1, 2] AS values",
