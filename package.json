@@ -18,6 +18,7 @@
     "start": "node dist/server.js",
     "dev": "bun --watch src/server.ts",
     "lint": "oxlint",
+    "prepare": "git config core.hooksPath .githooks",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
     "prepublishOnly": "npm run build"

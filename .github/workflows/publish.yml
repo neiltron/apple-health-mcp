@@ -70,6 +70,7 @@ jobs:
           console.log(`Release: ${pkg.name}@${pkg.version}`);
           NODE
       - run: bun install --frozen-lockfile
+      - run: bun run lint
       - run: bun test
       - run: bun run typecheck
       - run: bun run build
