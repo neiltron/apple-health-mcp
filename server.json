@@ -8,13 +8,13 @@
     "url": "https://github.com/neiltron/apple-health-mcp",
     "source": "github"
   },
-  "version": "1.4.3",
+  "version": "1.4.4",
   "packages": [
     {
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
       "identifier": "@neiltron/apple-health-mcp",
-      "version": "1.4.3",
+      "version": "1.4.4",
       "runtimeHint": "npx",
       "transport": {
         "type": "stdio"
