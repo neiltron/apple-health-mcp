@@ -45,8 +45,8 @@ jobs:
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
-      # Trusted Publishing requires npm 11.5.1 or later. No npm token is needed.
-      - run: npm install --global npm@11
+      # Staged publishing requires npm 11.15.0 or later. No npm token is needed.
+      - run: npm install --global 'npm@^11.15.0'
       - name: Check release versions
         env:
           RELEASE_REF: ${{ inputs.release_ref || github.event.release.tag_name }}
@@ -73,10 +73,24 @@ jobs:
       - run: bun test
       - run: bun run typecheck
       - run: bun run build
-      - name: Publish to npm
+      - name: Stage npm package for approval
         if: ${{ !inputs.registry_only }}
-        run: npm publish --access public --provenance
+        run: npm stage publish --access public --provenance
+      - name: Report approval required
+        if: ${{ !inputs.registry_only }}
+        env:
+          RELEASE_REF: ${{ inputs.release_ref || github.event.release.tag_name }}
+        run: |
+          PACKAGE=$(node -p "const p = require('./package.json'); p.name + '@' + p.version")
+          {
+            echo '## npm approval required'
+            printf 'Staged package: `%s`\n\n' "$PACKAGE"
+            echo 'Review the package in the npm Staged Packages tab and approve it with 2FA.'
+            echo 'The package is not public until you approve it. MCP Registry publication has not run.'
+            printf '\nAfter approval, run this workflow on main with release_ref `%s` and registry_only selected.\n' "$RELEASE_REF"
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: Check published npm metadata
+        if: ${{ inputs.registry_only }}
         run: |
           node --input-type=module <<'NODE'
           import assert from 'node:assert/strict';
@@ -90,6 +104,7 @@ jobs:
           assert.equal(published.mcpName, pkg.mcpName, 'Published MCP name differs');
           NODE
       - name: Publish to MCP Registry
+        if: ${{ inputs.registry_only }}
         run: |
           curl --fail --silent --show-error --location "https://github.com/modelcontextprotocol/registry/releases/download/v1.8.1/mcp-publisher_linux_amd64.tar.gz" | tar xz mcp-publisher
           ./mcp-publisher login github-oidc
