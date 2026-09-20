@@ -29,7 +29,7 @@ import { PROMPTS, buildPromptMessages } from "./prompts.js";
 import type { HealthQueryArgs, HealthReportArgs } from "./types.js";
 
 // Get configuration from environment
-const DATA_DIR = process.env.HEALTH_DATA_DIR || './HealthAll_2025-07-202_01-04-39_SimpleHealthExportCSV';
+const DATA_DIR = process.env.HEALTH_DATA_DIR ?? '';
 const MAX_MEMORY_MB = parseInt(process.env.MAX_MEMORY_MB || '2048');
 const CACHE_SIZE = parseInt(process.env.CACHE_SIZE || '100');
 
@@ -82,16 +82,11 @@ const validateHealthQueryArgs =
 const validateHealthReportArgs =
   argumentValidator.getValidator<HealthReportArgs>(healthReportInputSchema);
 
-// Validate data directory
 if (!DATA_DIR) {
-  // console.error('ERROR: HEALTH_DATA_DIR environment variable not set');
-  // console.error('Usage: HEALTH_DATA_DIR=/path/to/health/data bun run src/server.ts');
+  process.stderr.write('apple-health-mcp: HEALTH_DATA_DIR is not set\n');
   process.exit(1);
 }
 
-// console.log(`Starting Apple Health MCP Server...`);
-// console.log(`Data directory: ${DATA_DIR}`);
-// console.log(`Max memory: ${MAX_MEMORY_MB}MB`);
 
 // Initialize components
 const db = new HealthDataDB({ dataDir: DATA_DIR, maxMemoryMB: MAX_MEMORY_MB });
@@ -284,7 +279,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         );
     }
   } catch (error) {
-    // console.error(`Error executing tool ${name}:`, error);
     
     if (error instanceof McpError) {
       throw error;
@@ -301,7 +295,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 async function main() {
   try {
     // Initialize database and catalog
-    // console.log('Initializing database...');
     await db.initialize();
     
     // Scan health data files. A missing or unreadable data directory must not
@@ -330,18 +323,15 @@ async function main() {
     const transport = new StdioServerTransport();
     await server.connect(transport);
     
-    // console.log('Apple Health MCP Server ready!');
     
     // Handle shutdown
     process.on('SIGINT', async () => {
-      // console.log('\\nShutting down...');
       memoryManager.stopMonitoring();
       await db.close();
       process.exit(0);
     });
     
   } catch {
-    // console.error('Failed to start server');
     process.exit(1);
   }
 }

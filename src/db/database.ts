@@ -40,29 +40,20 @@ function inspectSerializedQuery(serialized: any): QueryInspection {
 export class HealthDataDB {
   private db: Database;
   private connections: Map<string, Connection> = new Map();
-  private config: HealthDataConfig & {
-    maxMemoryMB: number;
-    prewarmCache: boolean;
-  };
+  private dataDir: string;
+  private maxMemoryMB: number;
 
   constructor(config: HealthDataConfig) {
-    this.config = {
+    this.dataDir = config.dataDir;
       // A two-year multi-table export holds roughly 1 GiB resident in DuckDB,
       // so 2048MB leaves headroom for loading full history. MAX_MEMORY_MB
       // remains the user override.
-      maxMemoryMB: 2048,
-      prewarmCache: false,
-      ...config
-    };
+    this.maxMemoryMB = config.maxMemoryMB ?? 2048;
     
     this.db = new duckdb.Database(':memory:');
   }
   
   async initialize(): Promise<void> {
-    await this.setupDatabase();
-  }
-  
-  private async setupDatabase(): Promise<void> {
     return new Promise((resolve, reject) => {
       // Limit file access to the health data directory. Also disable external
       // access and lock these settings. The data directory stays readable and
@@ -72,9 +63,9 @@ export class HealthDataDB {
       //
       // Zero temporary capacity keeps health rows in memory. A load that does
       // not fit fails loudly instead of spilling personal data to disk.
-      const dataDir = escapeSqlLiteral(this.config.dataDir);
+      const dataDir = escapeSqlLiteral(this.dataDir);
       this.db.run(`
-        SET memory_limit = '${this.config.maxMemoryMB}MB';
+        SET memory_limit = '${this.maxMemoryMB}MB';
         SET threads = 4;
         SET max_temp_directory_size = '0 bytes';
         SET allowed_directories = ['${dataDir}'];

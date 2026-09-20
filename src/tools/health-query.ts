@@ -89,17 +89,9 @@ export class HealthQueryTool {
   }
   
   private formatAsCSV(result: QueryResult): string {
-    const lines: string[] = [];
-
-    // Header
-    lines.push(result.columns.map(escapeCsvField).join(','));
-
-    // Rows
-    for (const row of result.rows) {
-      lines.push(row.map(escapeCsvField).join(','));
-    }
-
-    return lines.join('\n');
+    return [result.columns, ...result.rows]
+      .map(row => row.map(escapeCsvField).join(','))
+      .join('\n');
   }
   
   private formatAsSummary(result: QueryResult): any {

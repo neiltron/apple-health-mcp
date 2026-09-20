@@ -15,6 +15,8 @@ interface DateRange {
   end: string;
 }
 
+const DEFAULT_METRICS = ['heart_rate', 'activity', 'sleep', 'workouts', 'calories'];
+
 export class HealthReportTool {
   private db: HealthDataDB;
   private cache: QueryCache;
@@ -35,7 +37,7 @@ export class HealthReportTool {
     const dateRange = this.getDateRange(report_type, start_date, end_date);
 
     // Determine which metrics to include
-    const metrics = include_metrics || this.getDefaultMetrics();
+    const metrics = include_metrics ?? DEFAULT_METRICS;
 
     // Generate report sections
     const sections: ReportSection[] = [];
@@ -57,7 +59,7 @@ export class HealthReportTool {
       },
       generatedAt: new Date().toISOString(),
       sections,
-      summary: this.generateOverallSummary(sections)
+      summary: sections.map(s => s.summary).join('. ')
     };
   }
 
@@ -68,43 +70,22 @@ export class HealthReportTool {
   ): DateRange {
     const now = new Date();
 
-    switch (type) {
-      case 'weekly':
-        const weekStart = new Date(now);
-        const weekEnd = new Date(now);
-        weekStart.setDate(now.getDate() - 7);
-        weekEnd.setDate(now.getDate() - 1);
-        return {
-          start: weekStart.toISOString().split('T')[0],
-          end: weekEnd.toISOString().split('T')[0]
-        };
-
-      case 'monthly':
-        const monthStart = new Date(now);
-        const monthEnd = new Date(now);
-        monthStart.setDate(now.getDate() - 30);
-        monthEnd.setDate(now.getDate() - 1);
-        return {
-          start: monthStart.toISOString().split('T')[0],
-          end: monthEnd.toISOString().split('T')[0]
-        };
-
-      case 'custom':
-        if (!startDate || !endDate) {
-          throw new Error('Start and end dates required for custom reports');
-        }
-        return { start: startDate, end: endDate };
+    if (type === 'custom') {
+      if (!startDate || !endDate) {
+        throw new Error('Start and end dates required for custom reports');
+      }
+      return { start: startDate, end: endDate };
     }
-  }
 
-  private getDefaultMetrics(): string[] {
-    return [
-      'heart_rate',
-      'activity',
-      'sleep',
-      'workouts',
-      'calories'
-    ];
+    const days = type === 'weekly' ? 7 : 30;
+    const start = new Date(now);
+    const end = new Date(now);
+    start.setDate(now.getDate() - days);
+    end.setDate(now.getDate() - 1);
+    return {
+      start: start.toISOString().split('T')[0],
+      end: end.toISOString().split('T')[0]
+    };
   }
 
   // Tables load on demand, so a report on a cold server has to load what it
@@ -121,10 +102,6 @@ export class HealthReportTool {
     }
 
     return loaded;
-  }
-
-  private getWorkoutTables(): string[] {
-    return this.catalog.getTablesByKind('workout');
   }
 
   private missingSection(title: string, metricLabel: string): ReportSection {
@@ -301,7 +278,7 @@ export class HealthReportTool {
     dateRange: { start: string; end: string }
   ): Promise<ReportSection> {
     // Workouts may be exported as one table or as one table per activity type.
-    const tables = await this.ensureTables(this.getWorkoutTables());
+    const tables = await this.ensureTables(this.catalog.getTablesByKind('workout'));
     if (tables.length === 0) {
       return this.missingSection('Workouts', 'workouts');
     }
@@ -441,10 +418,5 @@ export class HealthReportTool {
     const endDate = new Date(end);
     const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
     return Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
-  }
-
-  private generateOverallSummary(sections: ReportSection[]): string {
-    const summaries = sections.map(s => s.summary).filter(s => s);
-    return summaries.join('. ');
   }
 }

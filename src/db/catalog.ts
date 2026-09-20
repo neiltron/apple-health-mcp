@@ -95,11 +95,6 @@ export class FileCatalog {
     // tables stay queryable until evicted.
   }
 
-  getTablePath(tableName: string): string | undefined {
-    const entry = this.catalog.get(tableName.toLowerCase());
-    return entry?.path;
-  }
-
   getEntry(tableName: string): CatalogEntry | undefined {
     return this.catalog.get(tableName.toLowerCase());
   }
