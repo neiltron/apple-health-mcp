@@ -118,6 +118,15 @@ analytical statement. Comments and a trailing semicolon are valid. See
 [Query safeguards](architecture.md#query-safeguards) for supported statements
 and restricted operations.
 
+CSV results contain CSV text, without an extra JSON string wrapper. Dates use
+ISO strings, as they do in JSON results. SQL text values are returned unchanged.
+
+The CSV importer currently removes the source timezone offset and stores local
+clock times as DuckDB `TIMESTAMP` values. The binding returns these as JavaScript
+`Date` values. The `Z` in their output does not recover the original UTC instant.
+Use `CAST(startDate AS VARCHAR)` to return the stored clock time as text. Output
+formatting does not change SQL date grouping or correct the import timezone model.
+
 `health_report` accepts `weekly`, `monthly`, or `custom` reports. Custom reports
 require `start_date` and `end_date` in `YYYY-MM-DD` form. Optional
 `include_metrics` values are `heart_rate`, `activity`, `sleep`, `workouts`, and
