@@ -114,14 +114,9 @@ table and is usually the easiest way to request a weekly or monthly overview.
 ```
 
 `format` can be `json`, `csv`, or `summary`. `health_query` accepts one DuckDB
-analytical statement. It supports joins, CTEs, subqueries, set operations,
-window functions, FROM-first syntax, `DESCRIBE SELECT`, `SUMMARIZE`, `SHOW`,
-`TABLE`, and `VALUES`. Comments and a trailing semicolon are valid.
-
-The tool rejects multiple statements and statements that change data or
-database settings. It also rejects file-copy, attachment, extension, logging,
-dynamic SQL, and serialized SQL operations. `query_table(...)` remains
-available.
+analytical statement. Comments and a trailing semicolon are valid. See
+[Query safeguards](architecture.md#query-safeguards) for supported statements
+and restricted operations.
 
 `health_report` accepts `weekly`, `monthly`, or `custom` reports. Custom reports
 require `start_date` and `end_date` in `YYYY-MM-DD` form. Optional

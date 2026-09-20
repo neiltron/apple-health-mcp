@@ -41,13 +41,10 @@ normalized data model.
 
 - Never write logs or diagnostics to stdout while the MCP transport is active;
   stdout is reserved for protocol messages.
-- Preserve the `health_query` query checks. Accept one DuckDB analytical
-  statement. Reject logging functions, `query`, and
-  `json_execute_serialized_sql` before loading, cache lookup, or execution.
-  Keep joins, CTEs, subqueries, set operations, FROM-first syntax,
-  `DESCRIBE SELECT`, `SUMMARIZE`, `SHOW`, `TABLE`, and `VALUES` covered by
-  acceptance tests. Keep data changes, setting changes, and multiple statements
-  covered by rejection tests. `query_table` remains supported.
+- Preserve the `health_query` query checks. The supported statements and
+  restricted functions are listed in `docs/architecture.md` under "Query
+  safeguards". Check queries before loading, cache lookup, or execution.
+  Keep supported statements and rejected operations covered by tests.
 - Do not call the query checks a security boundary or an OS sandbox. Untrusted
   SQL requires process or OS isolation.
 - Keep DuckDB file, external-access, configuration-lock, memory, and no-spill

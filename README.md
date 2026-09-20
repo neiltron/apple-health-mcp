@@ -68,10 +68,9 @@ Start with `health_schema`; table names depend on the files in your export.
 See [Querying Apple Health data](https://github.com/neiltron/apple-health-mcp/blob/main/docs/querying.md)
 for the data model and working examples.
 
-`health_query` accepts one DuckDB analytical statement. It supports joins,
-CTEs, subqueries, set operations, window functions, and other DuckDB analysis
-features. It rejects statements that change data or database settings. It also
-rejects logging functions and functions that execute dynamic or serialized SQL.
+`health_query` accepts one DuckDB analytical statement. See
+[Query safeguards](https://github.com/neiltron/apple-health-mcp/blob/main/docs/architecture.md#query-safeguards)
+for supported statements and restricted operations.
 
 ## Query safeguards
 

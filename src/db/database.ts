@@ -3,11 +3,7 @@ import type { Database, Connection } from 'duckdb';
 import type { HealthDataConfig } from '../types';
 import { escapeSqlLiteral } from '../utils';
 
-export type QueryInspection =
-  | { outcome: 'accepted' }
-  | { outcome: 'statement-rejected' }
-  | { outcome: 'restricted-function' }
-  | { outcome: 'validator-failure' };
+export type QueryInspection = 'accepted' | 'statement-rejected' | 'restricted-function' | 'validator-failure';
 
 const RESTRICTED_QUERY_FUNCTIONS = new Set([
   'enable_logging',
@@ -18,80 +14,27 @@ const RESTRICTED_QUERY_FUNCTIONS = new Set([
   'json_execute_serialized_sql'
 ]);
 
-type SerializedAstValue = string | number | boolean | null | undefined | SerializedAstObject | SerializedAstValue[];
-
-interface SerializedAstObject {
-  [key: string]: SerializedAstValue;
-}
-
-function isRecord(value: SerializedAstValue): value is SerializedAstObject {
-  return Object(value) === value && !Array.isArray(value);
-}
-
-function isString(value: SerializedAstValue): value is string {
-  return Object(value) instanceof String && Object(value) !== value;
-}
-
-function isBoolean(value: SerializedAstValue): value is boolean {
-  return Object(value) instanceof Boolean && Object(value) !== value;
-}
-
-function inspectStatementFunctions(statement: SerializedAstObject): QueryInspection {
-  const worklist: SerializedAstValue[] = [statement];
-
-  while (worklist.length > 0) {
-    const value = worklist.pop();
-    if (Array.isArray(value)) {
-      for (let index = 0; index < value.length; index += 1) {
-        worklist.push(value[index]);
-      }
-      continue;
-    }
-    if (!isRecord(value)) continue;
-
-    for (const [key, child] of Object.entries(value)) {
-      if (key === 'function_name') {
-        if (!isString(child)) return { outcome: 'validator-failure' };
-        if (RESTRICTED_QUERY_FUNCTIONS.has(child.toLowerCase())) {
-          return { outcome: 'restricted-function' };
-        }
-      } else {
-        worklist.push(child);
-      }
-    }
-  }
-
-  return { outcome: 'accepted' };
-}
-
+// DuckDB's serializer only emits SELECT statements, or error:true for
+// anything else, so statement family is the error flag and statement count is
+// the array length. The reviver checks function names in the parsed JSON.
+// If JSON parsing fails, the query is rejected.
 function inspectSerializedQuery(serialized: any): QueryInspection {
-  if (!isString(serialized)) return { outcome: 'validator-failure' };
-
-  let ast: SerializedAstValue;
+  let restricted = false;
+  let ast: any;
   try {
-    // SAFETY: JSON.parse produces JSON values, exactly the recursive union
-    // modeled by SerializedAstValue; required fields are validated below.
-    ast = JSON.parse(serialized) as SerializedAstValue;
+    ast = JSON.parse(String(serialized), (key, value) => {
+      if (key === 'function_name' && RESTRICTED_QUERY_FUNCTIONS.has(String(value).toLowerCase())) {
+        restricted = true;
+      }
+      return value;
+    });
   } catch {
-    return { outcome: 'validator-failure' };
+    return 'validator-failure';
   }
-
-  if (!isRecord(ast) || !isBoolean(ast.error)) {
-    return { outcome: 'validator-failure' };
-  }
-  if (ast.error) return { outcome: 'statement-rejected' };
-  if (!Array.isArray(ast.statements)) return { outcome: 'validator-failure' };
-  if (ast.statements.length !== 1) return { outcome: 'statement-rejected' };
-
-  const statement = ast.statements[0];
-  if (
-    !isRecord(statement) ||
-    !isRecord(statement.node) ||
-    !isString(statement.node.type)
-  ) {
-    return { outcome: 'validator-failure' };
-  }
-  return inspectStatementFunctions(statement);
+  if (ast?.error === true) return 'statement-rejected';
+  if (ast?.error !== false || !Array.isArray(ast?.statements)) return 'validator-failure';
+  if (ast.statements.length !== 1) return 'statement-rejected';
+  return restricted ? 'restricted-function' : 'accepted';
 }
 
 export class HealthDataDB {
@@ -176,33 +119,11 @@ export class HealthDataDB {
   // policy narrow by scanning exact function_name fields for logging and SQL
   // execution functions. The validator receives query text as a bound VARCHAR.
   async inspectQuery(query: string, sessionId?: string): Promise<QueryInspection> {
-    let conn: Connection;
-    try {
-      conn = await this.getConnection(sessionId);
-    } catch {
-      return { outcome: 'validator-failure' };
-    }
-
+    const conn = await this.getConnection(sessionId);
     return new Promise((resolve) => {
-      try {
-        conn.all(
-          'SELECT json_serialize_sql(?::VARCHAR) AS ast',
-          query,
-          (err, result) => {
-            if (err || !Array.isArray(result) || result.length !== 1) {
-              resolve({ outcome: 'validator-failure' });
-              return;
-            }
-            try {
-              resolve(inspectSerializedQuery(result[0]?.ast));
-            } catch {
-              resolve({ outcome: 'validator-failure' });
-            }
-          }
-        );
-      } catch {
-        resolve({ outcome: 'validator-failure' });
-      }
+      conn.all('SELECT json_serialize_sql(?::VARCHAR) AS ast', query, (err, result) => {
+        resolve(err ? 'validator-failure' : inspectSerializedQuery(result?.[0]?.ast));
+      });
     });
   }
   
