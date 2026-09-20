@@ -123,6 +123,8 @@ npm run build
 
 See [Architecture](https://github.com/neiltron/apple-health-mcp/blob/main/docs/architecture.md)
 for the code layout, data lifecycle, and implementation constraints.
+See [Release procedure](https://github.com/neiltron/apple-health-mcp/blob/main/docs/releasing.md)
+for publishing and recovery steps.
 
 ## License
 
