@@ -3,28 +3,94 @@ name: publish
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      release_ref:
+        description: 'Existing release tag (vX.Y.Z) or full commit SHA'
+        required: true
+        type: string
+      registry_only:
+        description: 'Publish only MCP Registry metadata; npm must already contain this version'
+        required: true
+        default: true
+        type: boolean
 
 permissions:
-  id-token: write
   contents: read
+
+concurrency:
+  group: publish
+  cancel-in-progress: false
 
 jobs:
   publish:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
+      - name: Check release reference
+        env:
+          RELEASE_REF: ${{ inputs.release_ref || github.event.release.tag_name }}
+        run: |
+          if [[ ! "$RELEASE_REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ && ! "$RELEASE_REF" =~ ^[0-9a-f]{40}$ ]]; then
+            echo 'Use a release tag (vX.Y.Z) or a full commit SHA.' >&2
+            exit 1
+          fi
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_ref || github.event.release.tag_name }}
       - uses: oven-sh/setup-bun@v2
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
+      # Trusted Publishing requires npm 11.5.1 or later. No npm token is needed.
+      - run: npm install --global npm@11
+      - name: Check release versions
+        env:
+          RELEASE_REF: ${{ inputs.release_ref || github.event.release.tag_name }}
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
+          const server = JSON.parse(readFileSync('server.json', 'utf8'));
+          const implementation = readFileSync('src/server.ts', 'utf8');
+          const implementationVersion = implementation.match(/version:\s*"([^"]+)"/)?.[1];
+          assert.equal(server.version, pkg.version, 'Server metadata version differs');
+          assert.equal(implementationVersion, pkg.version, 'Implementation version differs');
+          const npmPackage = server.packages.find(p => p.registryType === 'npm');
+          assert.ok(npmPackage, 'Missing npm package metadata');
+          assert.equal(npmPackage.identifier, pkg.name, 'Package name differs');
+          assert.equal(npmPackage.version, pkg.version, 'Registry package version differs');
+          if (process.env.RELEASE_REF.startsWith('v')) {
+            assert.equal(process.env.RELEASE_REF, `v${pkg.version}`, 'Release tag version differs');
+          }
+          console.log(`Release: ${pkg.name}@${pkg.version}`);
+          NODE
       - run: bun install --frozen-lockfile
       - run: bun test
       - run: bun run typecheck
       - run: bun run build
-      - run: npm publish
+      - name: Publish to npm
+        if: ${{ !inputs.registry_only }}
+        run: npm publish --access public --provenance
+      - name: Check published npm metadata
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
+          const url = `https://registry.npmjs.org/${encodeURIComponent(pkg.name)}/${pkg.version}`;
+          const response = await fetch(url);
+          assert.ok(response.ok, `Cannot read published npm version: HTTP ${response.status}`);
+          const published = await response.json();
+          assert.equal(published.version, pkg.version, 'Published npm version differs');
+          assert.equal(published.mcpName, pkg.mcpName, 'Published MCP name differs');
+          NODE
       - name: Publish to MCP Registry
         run: |
-          curl -sL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m).tar.gz" | tar xz mcp-publisher
+          curl --fail --silent --show-error --location "https://github.com/modelcontextprotocol/registry/releases/download/v1.8.1/mcp-publisher_linux_amd64.tar.gz" | tar xz mcp-publisher
           ./mcp-publisher login github-oidc
           ./mcp-publisher publish

@@ -108,9 +108,17 @@ function protocolSession(child: ChildProcessWithoutNullStreams) {
 }
 
 async function stopChild(child: ChildProcessWithoutNullStreams): Promise<void> {
-  if (child.exitCode !== null) return;
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  const closed = once(child, 'close', { signal: AbortSignal.timeout(3_000) });
   child.kill('SIGINT');
-  await once(child, 'close', { signal: AbortSignal.timeout(3_000) }).catch(() => child.kill('SIGKILL'));
+  try {
+    await closed;
+  } catch (error) {
+    if (!(error instanceof Error) || error.name !== 'AbortError') throw error;
+    const killed = once(child, 'close', { signal: AbortSignal.timeout(1_000) });
+    child.kill('SIGKILL');
+    await killed;
+  }
 }
 
 describe('built MCP stdio query guardrails', () => {
@@ -128,6 +136,7 @@ describe('built MCP stdio query guardrails', () => {
     const session = protocolSession(child);
     const marker = 'health-query-native-stdout-marker';
     let logging: JsonRpcResponse | undefined;
+    let serializedSql: JsonRpcResponse | undefined;
     let benign: JsonRpcResponse | undefined;
 
     try {
@@ -145,7 +154,13 @@ describe('built MCP stdio query guardrails', () => {
           query: "SELECT * FROM enable_logging(storage := 'stdout')"
         }
       });
-      benign = await session.request(3, 'tools/call', {
+      serializedSql = await session.request(3, 'tools/call', {
+        name: 'health_query',
+        arguments: {
+          query: "SELECT * FROM json_execute_serialized_sql('{}')"
+        }
+      });
+      benign = await session.request(4, 'tools/call', {
         name: 'health_query',
         arguments: { query: `SELECT 1 /* ${marker} */` }
       });
@@ -157,6 +172,9 @@ describe('built MCP stdio query guardrails', () => {
     expect(logging).toBeDefined();
     expect(logging!.error).toBeDefined();
     expect(logging!.error!.message).toContain('restricted operational function');
+    expect(serializedSql).toBeDefined();
+    expect(serializedSql!.error).toBeDefined();
+    expect(serializedSql!.error!.message).toContain('restricted operational function');
     expect(benign).toBeDefined();
     expect(benign!.error).toBeUndefined();
 

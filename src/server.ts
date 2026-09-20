@@ -38,7 +38,7 @@ const healthQueryInputSchema = {
   properties: {
     query: {
       type: "string",
-      description: "One DuckDB SELECT-family statement (joins, CTEs, subqueries, set operations, DESCRIBE, SUMMARIZE, SHOW, TABLE, VALUES)"
+      description: "One DuckDB analytical query. Joins, CTEs, subqueries, set operations, and window functions are supported."
     },
     format: {
       type: "string",
@@ -108,7 +108,7 @@ const schemaTool = new HealthSchemaTool(db, catalog, loader);
 // Create MCP server
 const server = new Server({
   name: "apple-health-mcp",
-  version: "1.4.3",
+  version: "1.4.4",
 }, {
   capabilities: {
     tools: {},
@@ -122,7 +122,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [
     {
       name: "health_query",
-      description: "Run one DuckDB SELECT-family statement on Apple Health data. Logging and dynamic-SQL functions are blocked; query_table remains available. These guardrails assume a trusted local caller and do not sandbox attacker-controlled SQL.",
+      description: "Run one analytical query on Apple Health data.",
       inputSchema: healthQueryInputSchema
     },
     {

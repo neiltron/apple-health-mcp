@@ -220,6 +220,10 @@ describe('HealthDataDB query inspection', () => {
       'serialized SQL containing enable_logging',
       "SELECT * FROM json_execute_serialized_sql(json_serialize_sql('SELECT * FROM enable_logging(storage := ''stdout'')'))"
     ],
+    [
+      'serialized SQL execution',
+      "SELECT * FROM json_execute_serialized_sql('{}')"
+    ],
     ['uppercase spelling', "SELECT WRITE_LOG('marker')"],
     ['mixed-case spelling', "SELECT WrItE_LoG('marker')"],
     ['quoted spelling', `SELECT "write_log"('marker')`],
@@ -232,6 +236,24 @@ describe('HealthDataDB query inspection', () => {
       await expect(db.inspectQuery(query)).resolves.toBe('restricted-function');
     });
   }
+
+  test('blocks serialized SQL that hides a restricted function', async () => {
+    const serialized = await db.execute(
+      "SELECT json_serialize_sql('SELECT * FROM enable_logging(storage := ''stdout'')') AS ast"
+    );
+    const ast = escapeSqlLiteral(String(serialized[0].ast));
+    const query = `SELECT * FROM json_execute_serialized_sql('${ast}')`;
+
+    await expect(db.inspectQuery(query)).resolves.toBe('restricted-function');
+    await expect(tool.execute({ query })).rejects.toThrow(
+      'Query uses a restricted operational function'
+    );
+
+    const settings = await db.execute(
+      "SELECT current_setting('enable_logging') AS enabled"
+    );
+    expect(Number(settings[0].enabled)).toBe(0);
+  });
 
   test('distinguishes accepted and statement-shape outcomes', async () => {
     await expect(db.inspectQuery('SELECT 1')).resolves.toBe('accepted');
@@ -250,13 +272,16 @@ describe('HealthDataDB query inspection', () => {
   });
 
   test('maps missing and malformed serialized ASTs to validator infrastructure failure', async () => {
-    const malformedAsts = [undefined, '{not-json', '{"error":false}'];
+    const malformedAsts = [
+      undefined, '{not-json', '{"error":false}',
+      '{"statements":[{}]}', '{"error":"false","statements":[{}]}'
+    ];
 
     for (const ast of malformedAsts) {
       const inspectionDb = Object.create(HealthDataDB.prototype) as HealthDataDB;
       inspectionDb.getConnection = (async () => ({
-        all: (_sql: string, _query: string, callback: (error: Error | null, rows: unknown[]) => void) => {
-          callback(null, ast === undefined ? [] : [{ ast }]);
+        all: (_sql: string, _query: string, callback: (error: Error | null, rows: unknown[] | undefined) => void) => {
+          callback(null, ast === undefined ? undefined : [{ ast }]);
         }
       })) as typeof inspectionDb.getConnection;
 

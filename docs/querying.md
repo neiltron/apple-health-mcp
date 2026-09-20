@@ -113,14 +113,10 @@ table and is usually the easiest way to request a weekly or monthly overview.
 }
 ```
 
-`format` can be `json`, `csv`, or `summary`. `health_query` accepts exactly one
-DuckDB SELECT-family analytical statement; comments, whitespace, and a trailing
-semicolon are allowed. The supported forms and the blocked logging and
-dynamic-SQL functions are enumerated in
-[architecture.md](architecture.md#query-guardrails). These are query guardrails
-for a trusted local MCP host/tool caller, not a guarantee that arbitrary
-attacker-controlled SQL is safe; deployments accepting untrusted tool arguments
-need process or OS isolation.
+`format` can be `json`, `csv`, or `summary`. `health_query` accepts one DuckDB
+analytical statement. Comments and a trailing semicolon are valid. See
+[Query safeguards](architecture.md#query-safeguards) for supported statements
+and restricted operations.
 
 `health_report` accepts `weekly`, `monthly`, or `custom` reports. Custom reports
 require `start_date` and `end_date` in `YYYY-MM-DD` form. Optional

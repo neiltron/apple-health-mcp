@@ -68,25 +68,21 @@ Start with `health_schema`; table names depend on the files in your export.
 See [Querying Apple Health data](https://github.com/neiltron/apple-health-mcp/blob/main/docs/querying.md)
 for the data model and working examples.
 
-`health_query` accepts exactly one DuckDB SELECT-family analytical statement
-and rejects mutation, configuration, logging, and dynamic-SQL operations. The
-supported forms and blocked functions are enumerated under
-[Query guardrails](https://github.com/neiltron/apple-health-mcp/blob/main/docs/architecture.md#query-guardrails).
+`health_query` accepts one DuckDB analytical statement. See
+[Query safeguards](https://github.com/neiltron/apple-health-mcp/blob/main/docs/architecture.md#query-safeguards)
+for supported statements and restricted operations.
 
-## Local trust and query guardrails
+## Query safeguards
 
-Run the server through a local `stdio` MCP host under your OS account, and trust
-that host and its tool caller not to submit attacker-controlled SQL. Do not put
-an untrusted network bridge or direct caller in front of `health_query`.
-Prompt-injected or deliberately attacker-directed tool arguments are outside
-the supported threat model without process or OS isolation.
+The server limits DuckDB file access to `HEALTH_DATA_DIR`. It also disables
+network access and temporary disk storage, and it locks the database settings.
+The data directory stays readable and writable so the importer can read CSV
+files.
 
-DuckDB's filesystem, external-access, configuration-lock, memory, and no-spill
-settings are defense in depth, not a sandbox. They constrain outside-directory
-file access, network access, configuration changes, and temporary spill, but
-the allowlisted health-data directory remains readable and writable. Future
-side-effecting engine functions, expensive queries, interior symlinks, and
-engine/native-code vulnerabilities remain possible.
+These controls reduce accidental side effects from generated SQL. They do not
+isolate the process. Run the server through a local `stdio` MCP client. Do not
+expose it to an untrusted network client. Use process or OS isolation if the
+server must accept untrusted SQL.
 
 ## History and memory
 
@@ -126,6 +122,8 @@ npm run build
 
 See [Architecture](https://github.com/neiltron/apple-health-mcp/blob/main/docs/architecture.md)
 for the code layout, data lifecycle, and implementation constraints.
+See [Release procedure](https://github.com/neiltron/apple-health-mcp/blob/main/docs/releasing.md)
+for publishing and recovery steps.
 
 ## License
 
