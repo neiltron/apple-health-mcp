@@ -82,11 +82,10 @@ const validateHealthQueryArgs =
 const validateHealthReportArgs =
   argumentValidator.getValidator<HealthReportArgs>(healthReportInputSchema);
 
+// Start without data rather than exit, so clients can still list tools.
 if (!DATA_DIR) {
-  process.stderr.write('apple-health-mcp: HEALTH_DATA_DIR is not set\n');
-  process.exit(1);
+  process.stderr.write('apple-health-mcp: HEALTH_DATA_DIR is not set; starting with no tables\n');
 }
-
 
 // Initialize components
 const db = new HealthDataDB({ dataDir: DATA_DIR, maxMemoryMB: MAX_MEMORY_MB });

@@ -45,9 +45,9 @@ export class HealthDataDB {
 
   constructor(config: HealthDataConfig) {
     this.dataDir = config.dataDir;
-      // A two-year multi-table export holds roughly 1 GiB resident in DuckDB,
-      // so 2048MB leaves headroom for loading full history. MAX_MEMORY_MB
-      // remains the user override.
+    // A two-year multi-table export holds roughly 1 GiB resident in DuckDB,
+    // so 2048MB leaves headroom for loading full history. MAX_MEMORY_MB
+    // remains the user override.
     this.maxMemoryMB = config.maxMemoryMB ?? 2048;
     
     this.db = new duckdb.Database(':memory:');
@@ -63,12 +63,13 @@ export class HealthDataDB {
       //
       // Zero temporary capacity keeps health rows in memory. A load that does
       // not fit fails loudly instead of spilling personal data to disk.
-      const dataDir = escapeSqlLiteral(this.dataDir);
+      // DuckDB rejects an empty path, so an unset data directory allows none.
+      const allowed = this.dataDir ? `'${escapeSqlLiteral(this.dataDir)}'` : '';
       this.db.run(`
         SET memory_limit = '${this.maxMemoryMB}MB';
         SET threads = 4;
         SET max_temp_directory_size = '0 bytes';
-        SET allowed_directories = ['${dataDir}'];
+        SET allowed_directories = [${allowed}];
         SET enable_external_access = false;
         SET lock_configuration = true;
       `, (err) => {
