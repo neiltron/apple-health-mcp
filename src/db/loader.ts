@@ -82,17 +82,7 @@ export class TableLoader {
   }
 
   extractTableNames(query: string): string[] {
-    const tables = new Set<string>();
-    const allTables = this.catalog.getAllTables();
-
-    // Simple regex to find table names in query
     const queryLower = query.toLowerCase();
-    for (const table of allTables) {
-      if (queryLower.includes(table)) {
-        tables.add(table);
-      }
-    }
-
-    return Array.from(tables);
+    return this.catalog.getAllTables().filter(table => queryLower.includes(table));
   }
 }

@@ -65,7 +65,7 @@ describe('FileCatalog scanning', () => {
   });
 
   test('records the path for a workout export', () => {
-    expect(catalog.getTablePath('hkworkoutactivitytyperunning')).toBe(
+    expect(catalog.getEntry('hkworkoutactivitytyperunning')?.path).toBe(
       join(dataDir, 'HKWorkoutActivityTypeRunning.csv')
     );
   });
@@ -159,7 +159,7 @@ describe('FileCatalog refresh', () => {
     const expected = join(dupDir, matching[matching.length - 1]);
 
     expect(dupCatalog.getAllTables()).toEqual(['hkquantitytypeidentifierheartrate']);
-    expect(dupCatalog.getTablePath('hkquantitytypeidentifierheartrate')).toBe(expected);
+    expect(dupCatalog.getEntry('hkquantitytypeidentifierheartrate')?.path).toBe(expected);
     rmSync(dupDir, { recursive: true, force: true });
   });
 });

@@ -26,9 +26,7 @@ export interface CachedResult {
 
 export interface HealthDataConfig {
   dataDir: string;
-  cacheDir?: string;
   maxMemoryMB?: number;
-  prewarmCache?: boolean;
 }
 
 export type OutputFormat = 'json' | 'csv' | 'summary';
