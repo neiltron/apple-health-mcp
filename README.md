@@ -2,6 +2,7 @@
 
 [![npm version](https://badge.fury.io/js/@neiltron%2Fapple-health-mcp.svg)](https://www.npmjs.com/package/@neiltron/apple-health-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![neiltron/apple-health-mcp MCP server](https://glama.ai/mcp/servers/neiltron/apple-health-mcp/badges/score.svg)](https://glama.ai/mcp/servers/neiltron/apple-health-mcp)
 
 Query Apple Health data from an MCP client using SQL and DuckDB. The server runs
 locally, reads CSV exports on demand, and provides tools for schema discovery,
